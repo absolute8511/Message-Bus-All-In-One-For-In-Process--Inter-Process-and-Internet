@@ -1,0 +1,10 @@
+# Saved breakpoints file created on Thu Jun 16 23:04:04 CST 2011
+
+set $current_radix = $input_radix
+set input-radix 012
+
+break msgbus_interface.cpp:220
+break msgbus_interface.cpp:89
+break msgbus_interface.cpp:93
+
+set input-radix $current_radix
