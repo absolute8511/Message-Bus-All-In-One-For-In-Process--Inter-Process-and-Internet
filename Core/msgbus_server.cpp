@@ -212,7 +212,7 @@ void* msgbus_server_accept_thread( void* param )
     g_log.Log(lv_warn, "server waiting on port: %d ...", s_server_port);
     s_netmsgbus_server_running = true;
     // 长时间没有客户端连接的话,自动退出服务端
-    int noclient_quit_cnt = 0;
+    // int noclient_quit_cnt = 0;
     while(1){
         fd_set testreadfds = readfds;
 
@@ -224,22 +224,22 @@ void* msgbus_server_accept_thread( void* param )
             g_log.Log(lv_error, "server select error.");
             continue;
         }
-        if(active_clients.empty())
-        {
-            ++noclient_quit_cnt;
+        //if(active_clients.empty())
+        //{
+        //    ++noclient_quit_cnt;
 #ifdef NDEBUG
-            if(noclient_quit_cnt > 2)
+        //    if(noclient_quit_cnt > 2)
 #else
-            if(noclient_quit_cnt > 15)
+        //    if(noclient_quit_cnt > 15)
 #endif
-            {
-                s_netmsgbus_server_terminate = true;
-            }
-        }
-        else
-        {
-            noclient_quit_cnt = 0;
-        }
+        //    {
+        //        s_netmsgbus_server_terminate = true;
+        //    }
+        //}
+        //else
+        //{
+        //    noclient_quit_cnt = 0;
+        //}
         if(s_netmsgbus_server_terminate)
         {
             break;
