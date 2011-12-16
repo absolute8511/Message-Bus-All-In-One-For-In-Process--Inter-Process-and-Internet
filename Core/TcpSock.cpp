@@ -92,11 +92,14 @@ void TcpSock::RenewTimeout()
 
 void TcpSock::SetTimeout(int to_ms)
 {
-    if(to_ms < 0)
+    if(to_ms <= 0)
     {
         m_is_timeout_need = false;
         return;
     }
+
+    if(to_ms < 1000)
+        g_log.Log(lv_debug, "so litter timeout, you should use a timer thread. timeout:%d", to_ms);
     m_timeout_renew = to_ms;
     m_timeout_ms = core::utility::GetTickCount() + to_ms;
     m_is_timeout_need = true;
