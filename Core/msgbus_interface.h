@@ -62,6 +62,21 @@ namespace NetMsgBus
     {
         result.FromMsgBusParam(param);
     }
+
+    // convert protocol buffer types to msgbusparam.
+    template <typename T> MsgBusParam PBType2Param(const T& src)
+    {
+        int size = src.ByteSize();
+        boost::shared_array<char> paramdata(new char[size]);
+        src.SerializeToArray(paramdata.get(), size);
+        MsgBusParam msgparam(paramdata, size);
+        return msgparam;
+    }
+    template <typename T> void Param2PBType(MsgBusParam param, T& result)
+    {
+        result.ParseFromArray(param.paramdata.get(), param.paramlen);
+    }
+
     template <typename T> void Param2CustomType(MsgBusParam param, std::vector<T>& result)
     {
         T::MsgBusParamToVectorType(param, result);
