@@ -305,6 +305,8 @@ void testremotemsgbus()
         return;
     }
 
+    NetMsgQueryServices("");
+
     MyMsgHandlerClassPtr thandlerobj;
     MsgHandlerMgr::GetInstance(thandlerobj);
     if(inputflag == 'a' || inputflag == 'b' || inputflag == 'c')
@@ -632,10 +634,10 @@ int main()
     //testthreadpool();
     //testXParam();
     //testeventloop();
-    threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
+    //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
-    testlocalmsgbus();
-    //testremotemsgbus();
+    //testlocalmsgbus();
+    testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     DestroyMsgBus();
     threadpool::destroy_thread_pool();

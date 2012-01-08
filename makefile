@@ -26,5 +26,15 @@ linux-all: $(NEEDED_PATH)
 linux-cleanall: $(NEEDED_PATH)
 	$(foreach N,$(TARGET_DIRS),$(MAKE) -C $(N) clean;)
 
+webos-all: $(NEEDED_PATH)
+	$(foreach N,$(TARGET_DIRS),$(MAKE) -C $(N) -f makefile-webos;)
+
+webos-releaseall: $(NEEDED_PATH)
+	$(foreach N,$(TARGET_DIRS),$(MAKE) -C $(N) -f makefile-webos "BUILD=release";)
+
+webos-cleanall: $(NEEDED_PATH)
+	$(foreach N,$(TARGET_DIRS),$(MAKE) -C $(N) -f makefile-webos clean;)
+
+
 $(NEEDED_PATH):
 	mkdir -p $(NEEDED_PATH)

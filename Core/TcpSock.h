@@ -88,6 +88,8 @@ struct IsSameTcpSock
     }
     bool operator()(TcpSockSmartPtr right)
     {
+        if(left->IsClosed() || right->IsClosed())
+            return false;
         return left->GetFD() == right->GetFD();
     }
 private:

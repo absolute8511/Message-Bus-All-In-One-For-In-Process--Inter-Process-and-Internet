@@ -5,6 +5,7 @@
 #ifndef CORE_MSGBUS_DEF_H
 #define CORE_MSGBUS_DEF_H
 #include <stdint.h>
+#include <sys/types.h>
 #define MAX_SERVICE_NAME 64
 
 namespace NetMsgBus
@@ -31,6 +32,9 @@ enum kMsgBusBodyType {
     RSP_CONFIRM_ALIVE                    = 0x020003,
     RSP_SENDMSG                          = 0x020004,
     RSP_GETCLIENT                        = 0x020005,
+
+    BODY_PBTYPE                          = 0x030001,    // body is the protocol buffer data.
+    BODY_JSONTYPE                        = 0x030002,    // body is the json string.
 };
 
 typedef struct S_ClientHostInfo {
@@ -69,8 +73,8 @@ public:
     {
     }
 
-    uint16_t PackHead(char *data);
-    int  UnPackHead(const char *data);
+    uint16_t PackHead(char *data, size_t len = 0);
+    int  UnPackHead(const char *data, size_t len = 0);
     uint32_t Size();
     uint8_t             magic;
     uint16_t            version;
@@ -78,7 +82,6 @@ public:
     kMsgBusBodyType     body_type;
     uint32_t            body_len;
 };
-
 class MsgBusPackHeadReq : public MsgBusPackHead
 {
 public:
@@ -87,8 +90,8 @@ public:
     {
     }
 
-    uint16_t PackReqHead(char *data);
-    int  UnPackReqHead(const char *data);
+    uint16_t PackReqHead(char *data, size_t len = 0);
+    int  UnPackReqHead(const char *data, size_t len = 0);
     uint32_t Size();
 };
 
@@ -99,8 +102,8 @@ public:
         :MsgBusPackHead(1, type)
     {
     }
-    uint16_t PackRspHead(char *data);
-    int  UnPackRspHead(const char *data);
+    uint16_t PackRspHead(char *data, size_t len = 0);
+    int  UnPackRspHead(const char *data, size_t len = 0);
     uint32_t Size();
 };
 
@@ -116,10 +119,10 @@ private:
     MsgBusRegisterReq(MsgBusRegisterReq& src);
 
 public:
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     char service_name[MAX_SERVICE_NAME];
@@ -141,10 +144,10 @@ public:
 private:
     MsgBusRegisterRsp(const MsgBusRegisterRsp&);
 public:
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
     uint16_t ret_code;
     char   service_name[MAX_SERVICE_NAME];
@@ -164,10 +167,10 @@ private:
     MsgBusUnRegisterReq(MsgBusUnRegisterReq& src);
 
 public:
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     char service_name[MAX_SERVICE_NAME];
@@ -182,10 +185,10 @@ public:
         alive_flag(0)
     {
     }
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
     uint8_t  alive_flag;
 };
@@ -198,10 +201,10 @@ public:
         ret_code(0)
     {
     }
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
     uint16_t ret_code;
 };
@@ -217,10 +220,10 @@ public:
     {
     }
 
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     char dest_name[MAX_SERVICE_NAME];
@@ -233,10 +236,10 @@ public:
     {
     }
 
-    void PackBody(char * data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char * data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     uint16_t ret_code;
@@ -254,10 +257,10 @@ public:
     {
     }
 
-    void PackBody(char *data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char *data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     char dest_name[MAX_SERVICE_NAME];
@@ -275,10 +278,10 @@ public:
     {
     }
 
-    void PackBody(char * data);
-    void PackData(char *data);
-    int UnPackBody(const char *data);
-    int UnPackData(const char *data);
+    void PackBody(char * data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
 
     uint16_t ret_code;
@@ -286,6 +289,26 @@ public:
     uint16_t err_msg_len;
     char * err_msg;
 };
+
+class MsgBusPackPBType:public MsgBusPackHead
+{
+public:
+    MsgBusPackPBType()
+        :MsgBusPackHead(0, BODY_PBTYPE)
+    {
+    }
+    void PackBody(char * data, size_t len = 0);
+    void PackData(char *data, size_t len = 0);
+    int UnPackBody(const char *data, size_t len = 0);
+    int UnPackData(const char *data, size_t len = 0);
+    uint32_t Size();
+
+    int32_t   pbtype_len;
+    char*     pbtype;
+    int32_t   pbdata_len;
+    char*     pbdata;
+};
+
 
 #pragma pack(pop)
 

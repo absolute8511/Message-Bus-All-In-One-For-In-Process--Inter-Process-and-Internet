@@ -17,8 +17,10 @@ int32_t padding(const void* pointer, int32_t prev_size, int32_t next_size)
     return prev_size;
 }
 
-uint16_t MsgBusPackHead::PackHead(char *data)
+uint16_t MsgBusPackHead::PackHead(char *data, size_t len)
 {
+    if(len != 0 && len < Size())
+        throw;
     char *p = data;
     *((uint8_t *)p) = magic;
     p += padding(p, sizeof(magic), sizeof(version));
@@ -32,8 +34,10 @@ uint16_t MsgBusPackHead::PackHead(char *data)
     return (p - data);
 }
 
-int MsgBusPackHead::UnPackHead(const char * data)
+int MsgBusPackHead::UnPackHead(const char *data, size_t len)
 {
+    if(len != 0 && len < Size())
+        return -1;
     try{
     const char *p = data;
     magic = *((uint8_t *)p);
@@ -61,12 +65,12 @@ uint32_t MsgBusPackHead::Size()
 //    要考虑结构的对齐
 }
 
-uint16_t MsgBusPackHeadReq::PackReqHead(char *data)
+uint16_t MsgBusPackHeadReq::PackReqHead(char *data, size_t len)
 {
     char *p = data;
     return PackHead(p);
 }
-int MsgBusPackHeadReq::UnPackReqHead(const char *data)
+int MsgBusPackHeadReq::UnPackReqHead(const char *data, size_t len)
 {
     const char *p = data;
     int offset = UnPackHead(p);
@@ -80,12 +84,12 @@ uint32_t MsgBusPackHeadReq::Size()
 {
     return MsgBusPackHead::Size();
 }
-uint16_t MsgBusPackHeadRsp::PackRspHead(char *data)
+uint16_t MsgBusPackHeadRsp::PackRspHead(char *data, size_t len)
 {
     char *p = data;
     return PackHead(p);
 }
-int MsgBusPackHeadRsp::UnPackRspHead(const char *data)
+int MsgBusPackHeadRsp::UnPackRspHead(const char *data, size_t len)
 {
     const char *p = data;
     int offset = UnPackHead(p);
@@ -101,23 +105,29 @@ uint32_t MsgBusPackHeadRsp::Size()
     return MsgBusPackHead::Size();
 }
 
-void MsgBusRegisterReq::PackBody(char *data)
+void MsgBusRegisterReq::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     *((ClientHost *)p) = service_host;
 }
-void MsgBusRegisterReq::PackData(char *data)
+void MsgBusRegisterReq::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadReq::Size();
     PackReqHead(p);
     p += MsgBusPackHeadReq::Size();
     PackBody(p);
 }
-int MsgBusRegisterReq::UnPackBody(const char *data)
+int MsgBusRegisterReq::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     const char *p = data;
     try{
     strncpy(service_name, p, MAX_SERVICE_NAME);
@@ -130,8 +140,10 @@ int MsgBusRegisterReq::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusRegisterReq::UnPackData(const char *data)
+int MsgBusRegisterReq::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_REGISTER )
@@ -152,8 +164,10 @@ uint32_t MsgBusRegisterReq::Size()
 //    return MsgBusPackHeadReq::Size() + MAX_SERVICE_NAME + sizeof(service_host);
 }
 
-void MsgBusRegisterRsp::PackBody(char *data)
+void MsgBusRegisterRsp::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     char *p = data;
     *((uint16_t *)p) = ret_code;
     p += sizeof(ret_code);
@@ -163,16 +177,20 @@ void MsgBusRegisterRsp::PackBody(char *data)
     p += sizeof(err_msg_len);
     strncpy(p, err_msg, err_msg_len);
 }
-void MsgBusRegisterRsp::PackData(char *data)
+void MsgBusRegisterRsp::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadRsp::Size();
     PackRspHead(p);
     p += MsgBusPackHeadRsp::Size();
     PackBody(p);
 }
-int MsgBusRegisterRsp::UnPackBody(const char *data)
+int MsgBusRegisterRsp::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     const char *p = data;
     try{
     ret_code = *((uint16_t*)p);
@@ -189,8 +207,10 @@ int MsgBusRegisterRsp::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusRegisterRsp::UnPackData(const char *data)
+int MsgBusRegisterRsp::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_REGISTER )
@@ -210,23 +230,29 @@ uint32_t MsgBusRegisterRsp::Size()
     return MsgBusPackHeadRsp::Size() + sizeof(ret_code) + MAX_SERVICE_NAME + sizeof(err_msg_len) + err_msg_len;
 }
 
-void MsgBusUnRegisterReq::PackBody(char *data)
+void MsgBusUnRegisterReq::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     *((ClientHost *)p) = service_host;
 }
-void MsgBusUnRegisterReq::PackData(char *data)
+void MsgBusUnRegisterReq::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadReq::Size();
     PackReqHead(p);
     p += MsgBusPackHeadReq::Size();
     PackBody(p);
 }
-int MsgBusUnRegisterReq::UnPackBody(const char *data)
+int MsgBusUnRegisterReq::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     const char *p = data;
     try{
     strncpy(service_name, p, MAX_SERVICE_NAME);
@@ -239,8 +265,10 @@ int MsgBusUnRegisterReq::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusUnRegisterReq::UnPackData(const char *data)
+int MsgBusUnRegisterReq::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_UNREGISTER )
@@ -262,21 +290,27 @@ uint32_t MsgBusUnRegisterReq::Size()
 }
 
 
-void MsgBusConfirmAliveReq::PackBody(char *data)
+void MsgBusConfirmAliveReq::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     char *p = data;
     *((uint8_t*)p) = alive_flag;
 }
-void MsgBusConfirmAliveReq::PackData(char *data)
+void MsgBusConfirmAliveReq::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadReq::Size();
     PackReqHead(p);
     p += MsgBusPackHeadReq::Size();
     PackBody(p);
 }
-int MsgBusConfirmAliveReq::UnPackBody(const char *data)
+int MsgBusConfirmAliveReq::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     const char* p = data;
     try{
         alive_flag = *((uint8_t*)p);
@@ -288,8 +322,10 @@ int MsgBusConfirmAliveReq::UnPackBody(const char *data)
     }
     return 0;
 }
-int MsgBusConfirmAliveReq::UnPackData(const char *data)
+int MsgBusConfirmAliveReq::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_CONFIRM_ALIVE )
@@ -309,21 +345,27 @@ uint32_t MsgBusConfirmAliveReq::Size()
     return sizeof(MsgBusConfirmAliveReq);
 }
 
-void MsgBusConfirmAliveRsp::PackBody(char *data)
+void MsgBusConfirmAliveRsp::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     char *p = data;
     *((uint16_t *)p) = ret_code;
 }
-void MsgBusConfirmAliveRsp::PackData(char *data)
+void MsgBusConfirmAliveRsp::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadRsp::Size();
     PackRspHead(p);
     p += MsgBusPackHeadRsp::Size();
     PackBody(p);
 }
-int MsgBusConfirmAliveRsp::UnPackBody(const char *data)
+int MsgBusConfirmAliveRsp::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     const char *p = data;
     try{
     ret_code = *((uint16_t*)p);
@@ -334,8 +376,10 @@ int MsgBusConfirmAliveRsp::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusConfirmAliveRsp::UnPackData(const char *data)
+int MsgBusConfirmAliveRsp::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_REGISTER )
@@ -355,21 +399,27 @@ uint32_t MsgBusConfirmAliveRsp::Size()
     return MsgBusPackHeadRsp::Size() + sizeof(ret_code);
 }
 
-void MsgBusGetClientReq::PackBody(char *data)
+void MsgBusGetClientReq::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     char *p = data;
     strncpy(p, dest_name, MAX_SERVICE_NAME);
 }
-void MsgBusGetClientReq::PackData(char *data)
+void MsgBusGetClientReq::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadReq::Size();
     PackReqHead(p);
     p += MsgBusPackHeadReq::Size();
     PackBody(p);
 }
-int MsgBusGetClientReq::UnPackBody(const char *data)
+int MsgBusGetClientReq::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     const char *p = data;
     try{
     strncpy(dest_name, p, MAX_SERVICE_NAME);
@@ -380,8 +430,10 @@ int MsgBusGetClientReq::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusGetClientReq::UnPackData(const char *data)
+int MsgBusGetClientReq::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_GETCLIENT )
@@ -402,8 +454,10 @@ uint32_t MsgBusGetClientReq::Size()
 //    return MsgBusPackHeadReq::Size() + MAX_SERVICE_NAME + sizeof(service_host);
 }
 
-void MsgBusGetClientRsp::PackBody(char *data)
+void MsgBusGetClientRsp::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     char *p = data;
     *((uint16_t *)p) = ret_code;
     p += sizeof(ret_code);
@@ -411,16 +465,20 @@ void MsgBusGetClientRsp::PackBody(char *data)
     p += MAX_SERVICE_NAME;
     *((ClientHost *)p) = dest_host;
 }
-void MsgBusGetClientRsp::PackData(char *data)
+void MsgBusGetClientRsp::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadRsp::Size();
     PackRspHead(p);
     p += MsgBusPackHeadRsp::Size();
     PackBody(p);
 }
-int MsgBusGetClientRsp::UnPackBody(const char *data)
+int MsgBusGetClientRsp::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     const char *p = data;
     try{
     ret_code = *((uint16_t*)p);
@@ -435,8 +493,10 @@ int MsgBusGetClientRsp::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusGetClientRsp::UnPackData(const char *data)
+int MsgBusGetClientRsp::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_GETCLIENT )
@@ -456,8 +516,10 @@ uint32_t MsgBusGetClientRsp::Size()
     return sizeof(MsgBusGetClientRsp);
 }
 
-void MsgBusSendMsgReq::PackBody(char *data)
+void MsgBusSendMsgReq::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     char *p = data;
     strncpy(p, dest_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
@@ -469,16 +531,20 @@ void MsgBusSendMsgReq::PackBody(char *data)
     p += sizeof(msg_len);
     memcpy(p, msg_content, msg_len);
 }
-void MsgBusSendMsgReq::PackData(char *data)
+void MsgBusSendMsgReq::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadReq::Size();
     PackReqHead(p);
     p += MsgBusPackHeadReq::Size();
     PackBody(p);
 }
-int MsgBusSendMsgReq::UnPackBody(const char *data)
+int MsgBusSendMsgReq::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
+        throw;
     const char *p = data;
     try{
     strncpy(dest_name, p, MAX_SERVICE_NAME);
@@ -498,8 +564,10 @@ int MsgBusSendMsgReq::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusSendMsgReq::UnPackData(const char *data)
+int MsgBusSendMsgReq::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_SENDMSG )
@@ -521,8 +589,10 @@ uint32_t MsgBusSendMsgReq::Size()
         sizeof(msg_len) + msg_len;
 }
 
-void MsgBusSendMsgRsp::PackBody(char *data)
+void MsgBusSendMsgRsp::PackBody(char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     char *p = data;
     *((uint16_t *)p) = ret_code;
     p += sizeof(ret_code);
@@ -532,16 +602,20 @@ void MsgBusSendMsgRsp::PackBody(char *data)
     p += sizeof(err_msg_len);
     strncpy(p, err_msg, err_msg_len);
 }
-void MsgBusSendMsgRsp::PackData(char *data)
+void MsgBusSendMsgRsp::PackData(char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     char *p = data;
     body_len = Size() - MsgBusPackHeadRsp::Size();
     PackRspHead(p);
     p += MsgBusPackHeadRsp::Size();
     PackBody(p);
 }
-int MsgBusSendMsgRsp::UnPackBody(const char *data)
+int MsgBusSendMsgRsp::UnPackBody(const char *data, size_t len)
 {
+    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
+        throw;
     const char *p = data;
     try{
     ret_code = *((uint16_t*)p);
@@ -558,8 +632,10 @@ int MsgBusSendMsgRsp::UnPackBody(const char *data)
         return -1;
     }
 }
-int MsgBusSendMsgRsp::UnPackData(const char *data)
+int MsgBusSendMsgRsp::UnPackData(const char *data, size_t len)
 {
+    if( (len != 0) && (len < Size()))
+        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_SENDMSG )
@@ -578,6 +654,81 @@ uint32_t MsgBusSendMsgRsp::Size()
 {
     return MsgBusPackHeadRsp::Size() + sizeof(ret_code) + sizeof(msg_id) + 
         sizeof(err_msg_len) + err_msg_len;
+}
+
+void MsgBusPackPBType::PackBody(char *data, size_t len)
+{
+    if( (len != 0) && (len < (Size() - MsgBusPackHead::Size())))
+        throw;
+    char *p = data;
+    *((int32_t*)p) = pbtype_len;
+    p += sizeof(pbtype_len);
+    strncpy(p, pbtype, pbtype_len);
+    p += pbtype_len;
+    *((int32_t*)p) = pbdata_len;
+    p += sizeof(pbdata_len);
+    memcpy(p, pbdata, pbdata_len);
+}
+
+void MsgBusPackPBType::PackData(char *data, size_t len)
+{
+    if( (len != 0) && (len < Size()))
+        throw;
+    char *p = data;
+    body_len = Size() - MsgBusPackHead::Size();
+    PackHead(p);
+    p += MsgBusPackHead::Size();
+    PackBody(p);
+}
+
+int MsgBusPackPBType::UnPackBody(const char *data, size_t len)
+{
+    if( (len != 0) && (len < sizeof(pbtype_len)) )
+        throw;
+    const char *p = data;
+    try{
+    pbtype_len = *((uint32_t*)p);
+    p += sizeof(pbtype_len);
+    if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len) )
+        return -1;
+    strncpy(pbtype, p, pbtype_len);
+    p += pbtype_len;
+    if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len + sizeof(pbdata_len)) )
+        return -1;
+    pbdata_len = *((uint32_t*)p);
+    if( (len != 0) && (len < (Size() - MsgBusPackHead::Size())))
+        return -1;
+    p += sizeof(pbdata_len);
+    memcpy(pbdata, p, pbdata_len);
+    return 0;
+    }
+    catch(...)
+    {
+        return -1;
+    }
+}
+
+int MsgBusPackPBType::UnPackData(const char *data, size_t len)
+{
+    const char *p = data;
+    try{
+    if ( UnPackHead(p) >= 0 && body_type == BODY_PBTYPE )
+    {
+        p += MsgBusPackHead::Size();
+        return UnPackBody(p);
+    }
+    return -1;
+    }
+    catch(...)
+    {
+        return -1;
+    }
+}
+
+uint32_t MsgBusPackPBType::Size()
+{
+    return MsgBusPackHead::Size() + sizeof(pbtype_len) + pbtype_len + 
+        sizeof(pbdata_len) + pbdata_len;
 }
 
 

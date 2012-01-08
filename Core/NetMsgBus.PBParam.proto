@@ -1,0 +1,37 @@
+package NetMsgBus;
+
+message  PBQueryServicesReq{
+    required string match_prefix = 1;
+}
+
+message PBQueryServicesRsp{
+    repeated string service_name = 1;
+}
+
+// query what messages are supported by the service_name.
+
+message PBQueryMessagesReq{
+    required string service_name = 1;
+    required string match_prefix = 2;
+}
+
+message PBQueryMessagesRsp{
+    required string service_name = 1;
+    repeated string message_name = 2;
+}
+
+message PBClientInfo{
+    required uint32 client_ip = 1;
+    required uint32 client_port = 2;
+    required sint32 client_state = 3;
+}
+
+message PBServiceClients{
+    required string service_name = 1;
+    repeated PBClientInfo client_info = 2;
+}
+
+message PBSyncServerData{
+    required string server_name = 1;
+    repeated PBServiceClients service_info = 2;
+}

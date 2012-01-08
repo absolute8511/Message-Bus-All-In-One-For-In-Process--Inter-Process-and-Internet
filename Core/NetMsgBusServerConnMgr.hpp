@@ -13,6 +13,8 @@
 #include "TcpSock.h"
 #include "CommonUtility.hpp"
 #include "SimpleLogger.h"
+#include "NetMsgBus.PBParam.pb.h"
+#include <google/protobuf/descriptor.h>
 #include <map>
 #include <string>
 #include <netinet/in.h>
@@ -44,6 +46,7 @@ public:
         m_allrsphandlers[RSP_UNREGISTER] = &ServerConnMgr::HandleRspUnRegister;
         m_allrsphandlers[REQ_SENDMSG] = &ServerConnMgr::HandleReqSendMsg;
         m_allrsphandlers[RSP_CONFIRM_ALIVE] = &ServerConnMgr::HandleRspConfirmAlive;
+        m_allrsphandlers[BODY_PBTYPE] = &ServerConnMgr::HandleRspQueryServices;
     }
     ~ServerConnMgr()
     {
@@ -253,6 +256,28 @@ public:
         // unregister from msgbus server, receiver should shutdown, but we can still sendmsg.
         //s_server_connecting = false;
     }
+    void HandleRspQueryServices(const std::string& rsp_body)
+    {
+        g_log.Log(lv_debug, "query services response:%s", rsp_body.c_str());
+        MsgBusPackPBType pbpack;
+        boost::shared_array<char> tmpbuf(new char[rsp_body.size()]);
+        pbpack.pbtype = tmpbuf.get();
+        boost::shared_array<char> tmpbuf2(new char[rsp_body.size()]);
+        pbpack.pbdata = tmpbuf.get();
+
+        pbpack.UnPackBody(rsp_body.data());
+        PBQueryServicesRsp pbrsp;
+        pbrsp.ParseFromArray(pbpack.pbdata, pbpack.pbdata_len);
+        std::string service_name;
+
+        google::protobuf::RepeatedPtrField<std::string>::const_iterator cit = pbrsp.service_name().begin();
+        while(cit != pbrsp.service_name().end())
+        {
+            service_name += *cit + ",";
+            ++cit;
+        }
+        g_log.Log(lv_debug, "all available services:%s", service_name.c_str());
+    }
     void HandleUnknown(const std::string& rsp_body)
     {
         g_log.Log(lv_warn, "receive a unknown rsp from msgbus server.");
@@ -377,6 +402,35 @@ public:
             return m_server_tcp->SendData(req_data.get(), get_client_req.Size());
         return false;
     }
+
+    bool QueryAvailableServices(const std::string& match_str)
+    {
+        if(!m_server_connecting)
+        {
+            g_log.Log(lv_debug, "server not connecting while req receiver info.");
+            return false;
+        }
+        //printf("request client name :%s\n", clientname.c_str());
+        MsgBusPackPBType services_query;
+        PBQueryServicesReq pbreq;
+        pbreq.set_match_prefix(match_str);
+        std::string pbtype = PBQueryServicesReq::descriptor()->full_name();
+        services_query.pbtype_len = pbtype.size() + 1;
+        pbtype.push_back('\0');
+        services_query.pbtype = &pbtype[0];
+        int pbsize = pbreq.ByteSize();
+        boost::shared_array<char> pbdata(new char[pbsize]);
+        pbreq.SerializeToArray(pbdata.get(), pbsize);
+        services_query.pbdata_len = pbsize;
+        services_query.pbdata = pbdata.get();
+        boost::shared_array<char> req_data(new char[services_query.Size()]);
+        services_query.PackData(req_data.get());
+        assert(m_server_tcp);
+        if(m_server_tcp)
+            return m_server_tcp->SendData(req_data.get(), services_query.Size());
+        return false;
+    }
+
 private:
     EventLoopPool m_evpool;
     TcpSockSmartPtr m_server_tcp;

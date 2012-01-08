@@ -8,6 +8,8 @@ AR := ar
 BINDIR := $(MAKEROOT)/Bin
 LIBDIR := $(MAKEROOT)/Libs
 OBJDIR := $(MAKEROOT)/Objs
+PBCC := protoc
+PBCCFLAGS := --cpp_out=.
 ifeq ($(BUILD),release)
 # for release version
 CPPFLAGS :=  -O3  -DNDEBUG -fPIC -I/usr/local/Cellar/boost/1.46.0/include
@@ -28,16 +30,34 @@ all:
 release:
 	make -f makefile-mac "BUILD=release"
 
+$(OBJDIR)/%.pb.o:%.pb.cc
+	$(CC) -c `pkg-config --cflags protobuf` $< -o $@
+
 $(OBJDIR)/%.o:%.cpp
 	$(CC) -c $(CPPFLAGS) $< -o $@
 
+%.pb.cc : %.proto
+	$(PBCC) $(PBCCFLAGS) $<
+
+%.pb.h : %.proto
+	$(PBCC) $(PBCCFLAGS) $<
+
+
 include $(SRCFILES:.cpp=.d)
+include $(PBSRCFILES:.pb.cc=.pb.d)
 
 %.d: %.cpp
 	@set -e;rm -f $@;\
 	   	$(CC) -MM $(CPPFLAGS) $< > $@.$$$$;\
 	   	sed 's,\($*\)\.o[ :]*,$(OBJDIR)/\1.o $@ : ,g' < $@.$$$$ > $@;\
 		rm -f $@.$$$$
+
+%.pb.d: %.pb.cc
+	@set -e;rm -f $@;\
+	   	$(CC) -MM $(CPPFLAGS) $< > $@.$$$$;\
+	   	sed 's,\($*\)\.o[ :]*,$(OBJDIR)/\1.o $@ : ,g' < $@.$$$$ > $@;\
+		rm -f $@.$$$$
+
 
 
 

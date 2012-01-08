@@ -16,6 +16,8 @@
 #include "CommonUtility.hpp"
 #include "threadpool.h"
 #include "SimpleLogger.h"
+#include "NetMsgBus.PBParam.pb.h"
+#include <google/protobuf/descriptor.h>
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -39,6 +41,11 @@
 #include <iostream>
 #include <limits.h>
 
+#ifdef _WEBOS_
+#include "SDL.h"
+#include "PDL.h"
+#endif
+
 #define MSGBUS_SERVER_DEFAULT_PORT 19000
 #define TIMEOUT_SHORT 2
 #define KEEP_ALIVE_TIME  90000
@@ -47,6 +54,7 @@ using namespace std;
 using namespace NetMsgBus;
 using namespace core::net;
 using namespace core;
+using namespace google::protobuf;
 
 static LoggerCategory g_log("msgbus_server");
 // todo: write a hashmap to store many host servers
@@ -79,12 +87,57 @@ std::deque< BroadcastTask > broadcast_task_container;
 core::common::condition g_reqtask_cond;
 core::common::locker g_reqtask_locker;
 
+class PBHandlerBase
+{
+public:
+    virtual ~PBHandlerBase(){};
+    virtual void onPbData(TcpSockSmartPtr sp_tcp, const string& pbtype, const string& pbdata) const = 0;
+};
+
+template <typename T> class PBHandlerT: public PBHandlerBase
+{
+public:
+    typedef boost::function<void(TcpSockSmartPtr sp_tcp, T*)> PBHandlerCB;
+    PBHandlerT(const PBHandlerCB& cb)
+        :cb_(cb)
+    {
+    }
+    virtual void onPbData(TcpSockSmartPtr sp_tcp, const string& pbtype, const string& pbdata) const
+    {
+        const google::protobuf::DescriptorPool* pool = google::protobuf::DescriptorPool::generated_pool();
+        const google::protobuf::Descriptor* desp = pool->FindMessageTypeByName(pbtype);
+        const google::protobuf::Message* prototype = google::protobuf::MessageFactory::generated_factory()->GetPrototype(desp);
+        if(prototype)
+        {
+            google::protobuf::Message* msg = prototype->New();
+            if(msg->ParseFromArray(pbdata.data(), pbdata.size()))
+            {
+                T *t = dynamic_cast<T*>(msg);
+                assert(cb_ != NULL);
+                cb_(sp_tcp, t);
+            }
+        }
+    }
+private:
+    PBHandlerCB cb_;
+};
+
+typedef std::map<string, boost::shared_ptr<PBHandlerBase> > PBHandlerContainerT;
+static PBHandlerContainerT s_pb_handlers;
+
+template<typename T> void regist_pbdata_handler(const typename PBHandlerT<T>::PBHandlerCB& cb)
+{
+    boost::shared_ptr<PBHandlerT<T> > pbh(new PBHandlerT<T>(cb));
+    s_pb_handlers[T::descriptor()->full_name()] = pbh;
+}
+
 void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer);
 void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
 void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
 void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
 void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
 void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
 
 size_t server_onRead(TcpSockSmartPtr sp_tcp, const char* pdata, size_t size);
 bool server_onSend(TcpSockSmartPtr sp_tcp);
@@ -185,6 +238,7 @@ void* msgbus_server_accept_thread( void* param )
 #if defined (__APPLE__) || defined (__MACH__) 
     boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
 #else
+    //boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
     boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
 #endif
     EventLoopPool evpool;
@@ -346,6 +400,11 @@ void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head
                 process_confirm_alive_req(sp_tcp, bodybuffer, head.body_len);
             }
             break;
+        case BODY_PBTYPE:
+            {
+                process_pbbody_data(sp_tcp, bodybuffer, head.body_len);
+            }
+            break;
         default:
             break;
         }
@@ -486,9 +545,13 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
         }
     }
     assert(rsp.err_msg_len);
-    boost::shared_array<char> errmsgbuf(new char[rsp.err_msg_len]);
-    rsp.err_msg = errmsgbuf.get();
-    strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
+    //boost::shared_array<char> errmsgbuf(new char[rsp.err_msg_len]);
+    //rsp.err_msg = errmsgbuf.get();
+    //strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
+    //
+    // until I know, all implementation of std::string's storage is contiguous. 
+    errmsg.push_back('\0');
+    rsp.err_msg = &errmsg[0];
     rsp.err_msg[rsp.err_msg_len - 1] = '\0';
 
     boost::shared_array<char> outbuffer( new char[rsp.Size()] );
@@ -609,9 +672,12 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
         rsp.err_msg_len = errmsg.size() + 1;
     }
 
-    boost::shared_array<char> err_buf(new char[rsp.err_msg_len]);
-    rsp.err_msg = err_buf.get();
-    strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
+    //boost::shared_array<char> err_buf(new char[rsp.err_msg_len]);
+    //rsp.err_msg = err_buf.get();
+    //strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
+
+    // until I know, all implementation of std::string's storage is contiguous. 
+    rsp.err_msg = &errmsg[0];
     rsp.err_msg[rsp.err_msg_len - 1] = '\0';
 
     boost::shared_array<char> rspbuffer(new char[rsp.Size()]);
@@ -648,6 +714,65 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
     if(sp_tcp)
         sp_tcp->SendData(outbuffer.get(), rsp.Size());
 }
+
+void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+{
+    MsgBusPackPBType pbbody;
+    boost::shared_array<char> tempbuf(new char[body_len]);
+    boost::shared_array<char> tempbuf2(new char[body_len]);
+
+    pbbody.pbdata = tempbuf.get();
+    pbbody.pbtype = tempbuf2.get();
+    pbbody.UnPackBody(bodybuffer.get(), body_len);
+    string pbtype(pbbody.pbtype);
+    string pbdata(pbbody.pbdata, pbbody.pbdata_len);
+    PBHandlerContainerT::const_iterator cit = s_pb_handlers.find(pbtype);
+    if(cit != s_pb_handlers.end())
+    {
+        cit->second->onPbData(sp_tcp, pbtype, pbdata);
+    }
+    else
+    {
+        g_log.Log(lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
+    }
+}
+
+void onQueryServicesReq(TcpSockSmartPtr sp_tcp, PBQueryServicesReq* req)
+{
+    std::string prefix = req->match_prefix();
+    g_log.Log(lv_debug, "receive query service requst, prefix:%s", prefix.c_str());
+    PBQueryServicesRsp rsp;
+    {
+        core::common::locker_guard guard(g_activeclients_locker);
+        ServiceContainer::const_iterator cit = available_services.begin();
+        while(cit != available_services.end())
+        {
+            if(cit->first.find(prefix) != std::string::npos)
+            {
+                std::string *name = rsp.add_service_name();
+                *name = cit->first;
+            }
+            ++cit;
+        } 
+    }
+    MsgBusPackPBType packpb;
+    std::string pbtype = PBQueryServicesRsp::descriptor()->full_name();
+    packpb.pbtype_len = pbtype.size();
+    // until I know, all implementation of std::string's storage is contiguous. 
+    packpb.pbtype = &pbtype[0];
+    int size = rsp.ByteSize();
+    boost::shared_array<char> pbdata(new char[size]);
+    rsp.SerializeToArray(pbdata.get(), size);
+    g_log.Log(lv_debug, "rsp query services : %s", std::string(pbdata.get(), size).c_str());
+    packpb.pbdata_len = size; 
+    packpb.pbdata = pbdata.get();
+
+    boost::shared_array<char> outbuffer( new char[packpb.Size()] );
+    packpb.PackData(outbuffer.get(), packpb.Size());
+    if(sp_tcp)
+        sp_tcp->SendData(outbuffer.get(), packpb.Size());
+}
+
 // 发送请求或广播数据到其他客户端的处理线程
 void* msgbus_process_thread( void* param )
 {
@@ -738,6 +863,15 @@ void* msgbus_process_thread( void* param )
 
 int main(int argc, char* argv[])
 {
+#ifdef _WEBOS_
+    // Initialize the SDL library with the Video subsystem
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE);
+    atexit(SDL_Quit);
+    
+    // start the PDL library
+    PDL_Init(0);
+    atexit(PDL_Quit);
+#endif
     if(argc > 1)
     {
         s_server_port = strtol(argv[1], NULL, 10);
@@ -754,6 +888,9 @@ int main(int argc, char* argv[])
     pthread_t register_thread;
     pthread_t process_thread;
     SimpleLogger::Instance().Init(utility::GetModulePath() + "/msgbus_server_log.log", lv_debug);
+
+    // register all protocol buffer data handler.
+    regist_pbdata_handler<NetMsgBus::PBQueryServicesReq>(onQueryServicesReq);
 
     s_netmsgbus_server_terminate = false;
     if (0 != pthread_create(&register_thread, NULL, msgbus_server_accept_thread,NULL))

@@ -287,6 +287,8 @@ private:
 
     void Req2Receiver_onClose(TcpSockSmartPtr sp_tcp)
     {
+        core::common::locker_guard guard(m_rsp_sendmsg_lock);
+        m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
         //printf("req2receiver tcp disconnected.\n");
 
     }
@@ -371,11 +373,9 @@ private:
                     }
                 }
             }
-            // close sync Tcp
+            // close sync Tcp, remove the tcp in onClose event.
             sp_tcp->DisAllowSend();
         }
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
         return result;
     }
 
