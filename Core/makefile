@@ -10,6 +10,9 @@ MSGBUS_CLIENT_OBJS := msgbus_client.o msgbus_def.o msgbus_interface.o MsgHandler
 EVENTLOOPPOOL_OBJS := EventLoopPool.o EventLoop.o SockWaiterBase.o SelectWaiter.o TcpSock.o EpollWaiter.o
 LOGGER_OBJS := SimpleLogger.o
 
+PBPROTO := NetMsgBus.PBParam.proto
+
+export PBSRCFILES := $(PBPROTO:%.proto=%.pb.cc)
 export SRCFILES := EventLoop.cpp EventLoopPool.cpp msgbus_client.cpp msgbus_interface.cpp \
 	msgbus_server.cpp SelectWaiter.cpp SockWaiterBase.cpp TcpSock.cpp threadpool.cpp \
 	named_worker_thread.cpp threadpoolimp.cpp multitimer.cpp MsgHandlerMgr.cpp \
@@ -29,6 +32,7 @@ EVENTLOOPPOOL_OBJS_PATH := $(EVENTLOOPPOOL_OBJS:%.o=$(OBJDIR)/%.o)
 LOGGER_OBJS_PATH := $(LOGGER_OBJS:%.o=$(OBJDIR)/%.o)
 TESTTARGET := $(BINDIR)/test_client
 
+PBPARAMOBJS_PATH := $(PBPROTO:%.proto=$(OBJDIR)/%.pb.o)
 all:$(THREADPOOL_TARGET) $(MSGBUS_CLIENT_TARGET) $(MSGBUS_SERVER_TARGET) 
 
 msgbus:$(MSGBUS_CLIENT_TARGET) $(MSGBUS_SERVER_TARGET) 
@@ -37,14 +41,14 @@ threadpool:$(THREADPOOL_TARGET)
 
 test_client:$(TESTTARGET)
 
-$(MSGBUS_CLIENT_TARGET):$(MSGBUS_CLIENT_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) $(LOGGER_OBJS_PATH)
-	$(CC) $(SHARED) -o $@ $^ 
+$(MSGBUS_CLIENT_TARGET):$(MSGBUS_CLIENT_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) $(LOGGER_OBJS_PATH) $(PBPARAMOBJS_PATH)
+	$(CC) $(SHARED) -o $@ $^ `pkg-config --libs protobuf`
 
 $(THREADPOOL_TARGET):$(THREADPOOL_OBJS_PATH)
 	$(CC) $(SHARED)  -o $@ $^ 
 
-$(MSGBUS_SERVER_TARGET): $(MSGBUS_SERVER_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) $(LOGGER_OBJS_PATH)
-	$(CC)  -o $@ $^ $(LDFLAGS) 
+$(MSGBUS_SERVER_TARGET): $(MSGBUS_SERVER_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) $(LOGGER_OBJS_PATH) $(PBPARAMOBJS_PATH)
+	$(CC)  -o $@ $^ $(LDFLAGS) `pkg-config --libs protobuf`
 
 $(TESTTARGET):test.cpp msgbus_handlerbase.hpp msgbus_interface.h threadpool.h xparam.hpp MsgHandlerMgr.o
 	$(CC) $(CPPFLAGS) -o $@ $< MsgHandlerMgr.o -lmsgbusclient -ljsoncpp $(LDFLAGS)  
@@ -52,7 +56,7 @@ $(TESTTARGET):test.cpp msgbus_handlerbase.hpp msgbus_interface.h threadpool.h xp
 clean:
 	-rm -f *.d $(THREADPOOL_TARGET) $(THREADPOOL_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) \
 		$(MSGBUS_SERVER_TARGET) $(MSGBUS_CLIENT_TARGET) $(MSGBUS_CLIENT_OBJS_PATH) \
-		$(MSGBUS_SERVER_OBJS_PATH) $(LOGGER_OBJS_PATH)
+		$(MSGBUS_SERVER_OBJS_PATH) $(LOGGER_OBJS_PATH) $(PBPARAMOBJS_PATH)
 
 cleantest:
 	-rm -f $(TESTTARGET)
