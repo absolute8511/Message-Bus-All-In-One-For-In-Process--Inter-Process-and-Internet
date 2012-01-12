@@ -183,7 +183,7 @@ private:
                         close(client_sockfd);
                         continue;
                     }
-                    printf("a new client connected to sendmsg. fd = %d.\n", client_sockfd);
+                    //printf("a new client connected to sendmsg. fd = %d.\n", client_sockfd);
                     //printf("a new client connected to sendmsg:%lld\n", (int64_t)core::utility::GetTickCount());
                     char ip[INET_ADDRSTRLEN];
                     TcpSockSmartPtr newtcp(new TcpSock(client_sockfd, 

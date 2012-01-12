@@ -1,6 +1,7 @@
 #include "SelectWaiter.h"
 #include "SockEvent.hpp"
 #include "SimpleLogger.h"
+#include "CommonUtility.hpp"
 
 namespace core { namespace net { 
 
@@ -52,7 +53,16 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
             maxfd = fd;
         ++cit;
     }
+    if(maxfd == 0)
+    {
+        //printf("tick:select start:%lld\n", (int64_t)utility::GetTickCount());
+        // if tmp_tcpsocks is Empty, timeout need longer .
+        ::select(0, NULL, NULL, NULL, &tv);
+    }
     int retcode = ::select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
+    //if(maxfd == 0)
+        //printf("tick:select end:%lld, tv.tv_usec:%ld, retcode:%d\n", (int64_t)utility::GetTickCount(),
+        //    tv.tv_usec, retcode);
     TcpSockContainerT::iterator it = tmp_tcpsocks.begin();
     while(it != tmp_tcpsocks.end() && *it)
     {
