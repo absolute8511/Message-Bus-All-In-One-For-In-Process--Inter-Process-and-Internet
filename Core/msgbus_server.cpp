@@ -440,7 +440,6 @@ void server_onError(TcpSockSmartPtr sp_tcp)
 
 void server_onClose(TcpSockSmartPtr sp_tcp)
 {
-    g_log.Log(lv_debug, "removing client fd: %d in server.", sp_tcp->GetFD());
     // remove the client info from the map.
     core::common::locker_guard guard(g_activeclients_locker);
     ActiveClientTcpContainer::iterator it = active_clients.begin();
@@ -448,7 +447,9 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
     {
         TcpSockContainerT::iterator clientit = std::find_if(it->second.begin(), it->second.end(), IsSameTcpSock( sp_tcp ));
         if( clientit != it->second.end() )
-        {
+        {   
+            g_log.Log(lv_debug, "removing client fd: %d , one active of service:%s ,in server.",
+                sp_tcp->GetFD(), it->first.c_str());
             it->second.erase(clientit);
             if(it->second.empty())
                 active_clients.erase(it);

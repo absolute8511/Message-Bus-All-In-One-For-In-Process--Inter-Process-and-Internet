@@ -48,23 +48,23 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
+        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-        sleep(3);
+        sleep(1);
         return true;
     }
     bool testMsgBus2(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendDirectToClient);
+        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
-        sleep(2);
+        sleep(1);
         return true;
     }
     bool testMsgBus3(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
-        //printMsg(msgid, param, __FUNCTION__);
+        printMsg(msgid, param, __FUNCTION__);
         std::string rspstr("Yeah! I send the rsp data to you.");
         param = CustomType2Param(rspstr);
         //sleep(3);
@@ -87,7 +87,7 @@ public:
     {
         m_test_cached_param.push_back(param);
         printf("caching param\n");
-        sleep(2);
+        sleep(1);
         return true;
     }
     void printMsg(const std::string& msgid, MsgBusParam param, const std::string& func_name)
@@ -152,7 +152,7 @@ public:
     bool testMsgBus23(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
         printMsg(msgid, param, __FUNCTION__);
-        sleep(3);
+        sleep(1);
         return true;
     }
     void printMsg(const std::string& msgid, MsgBusParam param, const std::string& func_name)
@@ -377,10 +377,10 @@ void testremotemsgbus()
             // 测试群组消息，通过服务器可以发送群组消息
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //GenerateNextTestParam(param);
+            GenerateNextTestParam(param);
             // 测试向指定的接收者发送消息
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             sendcounter++;
             //if(sendcounter % 100 == 0)
             //{
@@ -389,9 +389,9 @@ void testremotemsgbus()
             //GenerateNextTestParam(param);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //GenerateNextTestParam(param);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            GenerateNextTestParam(param);
+            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             //GenerateNextTestParam(param);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
@@ -417,8 +417,8 @@ void testremotemsgbus()
             }
             
             //threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
-            //        "msg_netmsgbus_testgetdata", param, 20), 0);
-            //sleep(1);
+            //        "msg_netmsgbus_testgetdata", param, mintimeout), 0);
+            sleep(1);
         }
         printf("\n");
         core::XParam xp2;
@@ -640,6 +640,7 @@ int main()
     testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     DestroyMsgBus();
+    EventLoopPool::DestroyEventLoopPool();
     threadpool::destroy_thread_pool();
     printf("leave thread pool and msgbus.\n");
 }

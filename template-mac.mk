@@ -15,7 +15,7 @@ ifeq ($(BUILD),release)
 CPPFLAGS :=  -O3  -DNDEBUG -fPIC -I/usr/local/Cellar/boost/1.46.0/include
 else
 # for debug version
-CPPFLAGS :=  -O0  -Wall -fPIC -gdwarf-2 -g -pg -I/usr/local/Cellar/boost/1.46.0/include
+CPPFLAGS :=  -O0  -Wall -fPIC -gdwarf-2 -g -I/usr/local/Cellar/boost/1.46.0/include
 endif
 LDFLAGS := -L. -L$(BINDIR) -L$(LIBDIR)
 SHARED  := -dynamiclib 

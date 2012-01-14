@@ -420,6 +420,7 @@ private:
         if( !newtcp )
         {
             //printf("begin connect client:%lld\n", (int64_t)core::utility::GetTickCount());
+            //printf("begin connect client: %s,%u. \n", task.clientname.c_str(), destclient.host_port);
             struct timeval tv;
             tv.tv_sec = task.timeout;
             tv.tv_usec = 0;
