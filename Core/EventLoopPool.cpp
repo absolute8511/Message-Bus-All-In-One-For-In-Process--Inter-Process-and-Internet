@@ -42,6 +42,14 @@ void EventLoopPool::DestroyEventLoopPool()
         jointids.push_back(it->second.looptid);
         ++it;
     }
+    EventLoopContainerT::iterator inner_it = m_innerloop_pool.begin();
+    while(inner_it != m_innerloop_pool.end())
+    {
+        inner_it->second.eventloop->TerminateLoop();
+        jointids.push_back(inner_it->second.looptid);
+        ++inner_it;
+    }
+
     for(size_t i = 0; i < jointids.size(); ++i)
         pthread_join(jointids[i], NULL);
     // wait for the event loop to end, because the loop has to use the eventloop object,
