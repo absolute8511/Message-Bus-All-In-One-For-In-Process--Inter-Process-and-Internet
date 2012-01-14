@@ -32,16 +32,32 @@ void EventLoop::CloseAllClient()
         m_event_waiter->DisAllowAllTcpSend();
 }
 
-//void EventLoop::AddTcpSock(TcpSockSmartPtr sp_tcp)
-//{
-//    if(m_terminal)
-//        return;
-//    m_event_waiter->AddTcpSock(sp_tcp);
-//}
+bool EventLoop::IsTcpExist(TcpSockSmartPtr sp_tcp)
+{
+    if(m_event_waiter)
+        return m_event_waiter->IsTcpExist(sp_tcp);
+    return false;
+}
+
+bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
+{
+    if(m_terminal || m_event_waiter==NULL)
+        return false;
+    return m_event_waiter->AddTcpSock(sp_tcp);
+}
 
 void EventLoop::TerminateLoop()
 {
     m_terminal = true;
+}
+
+int EventLoop::GetActiveTcpNum()
+{
+    if(m_terminal)
+        return 0;
+    if(m_event_waiter)
+        return m_event_waiter->GetActiveTcpNum();
+    return 0;
 }
 
 void EventLoop::SetSockWaiter(boost::shared_ptr<SockWaiterBase> spwaiter)

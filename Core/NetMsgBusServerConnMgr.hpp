@@ -140,23 +140,25 @@ public:
         callback.onClose = boost::bind(&ServerConnMgr::onServerTcpClose, this, _1);
         callback.onError = boost::bind(&ServerConnMgr::onServerTcpError, this, _1);
         callback.onTimeout = boost::bind(&ServerConnMgr::onServerTimeout, this, _1);
-
-#if defined (__APPLE__) || defined (__MACH__) 
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-#else
-        boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
-#endif
+//
+//#if defined (__APPLE__) || defined (__MACH__) 
+//        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
+//#else
+//        boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
+//#endif
         m_server_tcp->SetNonBlock();
         m_server_tcp->SetCloseAfterExec();
         m_server_tcp->SetSockHandler(callback);
         m_server_tcp->SetTimeout(KEEP_ALIVE_TIME);
-        spwaiter->AddTcpSock(m_server_tcp);
-        m_evpool.CreateEventLoop("server_connect_loop", spwaiter);
+        //spwaiter->AddTcpSock(m_server_tcp);
+        EventLoopPool::AddTcpSockToInnerLoop(m_server_tcp);
         return true;
     }
     void StopServerConnection()
     {
-        m_evpool.TerminateLoop("server_connect_loop");
+        //EventLoopPool::TerminateLoop("server_connect_loop");
+        if(m_server_tcp)
+            m_server_tcp->DisAllowSend();
         m_server_connecting = false;
     }
     bool ProcessRspBody(kMsgBusBodyType body_type, const std::string& rsp_body)
@@ -432,7 +434,7 @@ public:
     }
 
 private:
-    EventLoopPool m_evpool;
+    //EventLoopPool m_evpool;
     TcpSockSmartPtr m_server_tcp;
     std::string m_serverip;
     unsigned short int m_serverport;

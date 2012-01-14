@@ -4,15 +4,34 @@
 #include <boost/shared_ptr.hpp>
 #include <vector>
 #include <stdio.h>
+#if defined (__APPLE__) || defined (__MACH__) 
+#include "SelectWaiter.h"
+#else
+#include "EpollWaiter.h"
+#endif
+
+#define MAX_TCPNUM 10
 
 namespace core { namespace net {
+
+struct EventLoopWrapper
+{
+    boost::shared_ptr< EventLoop > eventloop;
+    pthread_t looptid;
+};
+typedef std::map<std::string, EventLoopWrapper > EventLoopContainerT;
+
+
+static EventLoopContainerT  m_eventloop_pool;
+static EventLoopContainerT  m_innerloop_pool;
+static core::common::locker m_pool_locker;
 
 static LoggerCategory g_log("EventLoopPool");
 
 EventLoopPool::EventLoopPool()
 {
 }
-EventLoopPool::~EventLoopPool()
+void EventLoopPool::DestroyEventLoopPool()
 {
     EventLoopContainerT::iterator it = m_eventloop_pool.begin();
     std::vector< pthread_t > jointids;
@@ -52,17 +71,61 @@ bool EventLoopPool::CreateEventLoop(const std::string& name, boost::shared_ptr<S
     return false;
 }
 
-//bool EventLoopPool::AddTcpSockToLoop(const std::string& name, TcpSockSmartPtr sp_tcp)
-//{
-//    core::common::locker_guard guard(m_pool_locker);
-//    EventLoopContainerT::iterator it = m_eventloop_pool.find(name);
-//    if(it != m_eventloop_pool.end())
-//    {
-//        it->second.eventloop->AddTcpSock(sp_tcp);
-//        return true;
-//    }
-//    return false;
-//}
+bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
+{
+    core::common::locker_guard guard(m_pool_locker);
+    EventLoopContainerT::iterator it = m_innerloop_pool.begin();
+    boost::shared_ptr<EventLoop> addedev;
+    while(it != m_innerloop_pool.end())
+    {
+        if(it->second.eventloop)
+        {
+            if(it->second.eventloop->IsTcpExist(sp_tcp))
+            {
+                g_log.Log(lv_debug, "duplicate tcp not added.");
+                return true;
+            }
+        }
+        addedev = it->second.eventloop;
+        ++it;
+    }
+    if(addedev == NULL || addedev->GetActiveTcpNum() > MAX_TCPNUM)
+    {
+        boost::shared_ptr<EventLoop> sock_el(new EventLoop);
+#if defined (__APPLE__) || defined (__MACH__) 
+        boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+#else
+        //boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+        boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
+#endif
+        sock_el->SetSockWaiter(spwaiter);
+        pthread_t tid;
+        if (sock_el->StartLoop(tid))
+        {
+            addedev = sock_el;
+            std::string name = "innerloop_";
+            std::string id;
+            id.push_back('a' + m_innerloop_pool.size());
+            EventLoopWrapper wrapper;
+            wrapper.eventloop = sock_el;
+            wrapper.looptid = tid;
+            m_innerloop_pool[name + id] = wrapper;
+            g_log.Log(lv_debug, "new inner tcp event loop:%s started, tid:%ld.", id.c_str(), (long)tid);
+        }
+        else
+        {
+            g_log.Log(lv_warn, "start inner event loop failed.");
+            return false;
+        }
+    }
+    if(addedev)
+    {
+        addedev->AddTcpSockToLoop(sp_tcp);
+        g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
+        return true;
+    }
+    return false;
+}
 
 boost::shared_ptr<EventLoop> EventLoopPool::GetEventLoop(const std::string& name)
 {

@@ -140,7 +140,7 @@ private:
 #else
         boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
 #endif
-        recv_mgr->m_evpool.CreateEventLoop("msg_receiver_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("msg_receiver_loop", spwaiter);
         // 这里先将正准备接收数据标记置位，如果注册接收服务失败，会把该标记位清除
         recv_mgr->m_receiver_running = true;
         //printf("client receiver waiting msgs from clients ...\n");
@@ -198,7 +198,7 @@ private:
             }
         }
         close(receive_server_sockfd);
-        recv_mgr->m_evpool.TerminateLoop("msg_receiver_loop");
+        EventLoopPool::TerminateLoop("msg_receiver_loop");
         recv_mgr->m_receiver_running = false;
         return 0;
     }
@@ -313,7 +313,7 @@ private:
     volatile bool m_receiver_terminate;
     // the thread running to receive the message from other client.
     pthread_t m_receiver_tid;
-    EventLoopPool m_evpool;
+    //EventLoopPool m_evpool;
     int m_sendmsg_clientnum;
     unsigned short int m_localport;
     // record the validate sender name of the tcp from client 

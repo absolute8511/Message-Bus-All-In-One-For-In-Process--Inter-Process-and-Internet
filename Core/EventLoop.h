@@ -2,6 +2,7 @@
 #define  CORE_NET_EVENT_LOOP_H
 
 #include "lock.hpp"
+#include "TcpSock.h"
 #include <pthread.h>
 #include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
@@ -15,13 +16,13 @@ class EventLoop : private boost::noncopyable, public boost::enable_shared_from_t
 public:
     EventLoop();
     ~EventLoop();
-    // for effecient, no duplicate checked.
-    //void AddTcpSock(TcpSockSmartPtr sp_tcp);
-    //int  GetActiveFDNum();
+    bool AddTcpSockToLoop(TcpSockSmartPtr sp_tcp);
+    int  GetActiveTcpNum();
     void TerminateLoop();
     void SetSockWaiter(boost::shared_ptr<SockWaiterBase> spwaiter);
     bool StartLoop(pthread_t& tid);
     boost::shared_ptr<SockWaiterBase> GetEventWaiter() { return m_event_waiter; }
+    bool IsTcpExist(TcpSockSmartPtr sp_tcp);
 private:
     static void* Loop(void*);
     void CloseAllClient();

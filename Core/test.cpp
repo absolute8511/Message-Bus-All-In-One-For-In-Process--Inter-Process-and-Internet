@@ -305,7 +305,7 @@ void testremotemsgbus()
         return;
     }
 
-    NetMsgQueryServices("");
+    NetMsgBusQueryServices("");
 
     MyMsgHandlerClassPtr thandlerobj;
     MsgHandlerMgr::GetInstance(thandlerobj);
@@ -536,13 +536,13 @@ void testXParam()
 class TestEventLoop
 {
 private:
-    EventLoopPool m_evpool;
+    //EventLoopPool m_evpool;
     TcpSockSmartPtr m_pConnection;
 public:
     TestEventLoop()
     {
         boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        m_evpool.CreateEventLoop("test_event_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("test_event_loop", spwaiter);
     }
     size_t test_onRead(TcpSockSmartPtr sp, const char* pdata, size_t size)
     {
@@ -565,11 +565,11 @@ public:
     bool testLoop()
     {
         boost::shared_ptr<SockWaiterBase> spwaiter;
-        if(!m_evpool.GetEventLoop("test_event_loop"))
+        if(!EventLoopPool::GetEventLoop("test_event_loop"))
         {
             return false;
         }
-        spwaiter = m_evpool.GetEventLoop("test_event_loop")->GetEventWaiter();
+        spwaiter = EventLoopPool::GetEventLoop("test_event_loop")->GetEventWaiter();
         if(!spwaiter)
         {
             return false;

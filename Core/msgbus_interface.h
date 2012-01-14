@@ -134,7 +134,7 @@ namespace NetMsgBus
     std::string& rsp_data, int32_t timeout_sec = 30);
 
     // query all available services that are registered on the net message bus server
-    int  NetMsgQueryServices(const std::string& match_str);
+    int  NetMsgBusQueryServices(const std::string& match_str);
  
 }
 

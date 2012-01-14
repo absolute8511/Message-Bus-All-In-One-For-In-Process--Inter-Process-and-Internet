@@ -513,7 +513,7 @@ bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, M
     return msgbus_sendmsg_direct_to_client(clientname, netmsg_len, netmsg_data, rsp_data, timeout_sec);
 }
 
-int  NetMsgQueryServices(const std::string& match_str)
+int  NetMsgBusQueryServices(const std::string& match_str)
 {
     return msgbus_query_available_services(match_str);
 }

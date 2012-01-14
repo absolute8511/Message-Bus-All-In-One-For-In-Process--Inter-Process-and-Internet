@@ -14,24 +14,19 @@ namespace core { namespace net {
 class EventLoopPool : private boost::noncopyable
 {
 public:
-    EventLoopPool();
-    ~EventLoopPool();
-    bool CreateEventLoop(const std::string& name, boost::shared_ptr<SockWaiterBase> spwaiter);
-    //bool AddTcpSockToLoop(const std::string& name, TcpSockSmartPtr sp_tcp);
-    void TerminateLoop(const std::string& name);
-    boost::shared_ptr< EventLoop > GetEventLoop(const std::string& name);
+    static void  DestroyEventLoopPool();
+    static bool CreateEventLoop(const std::string& name, boost::shared_ptr<SockWaiterBase> spwaiter);
+    static void TerminateLoop(const std::string& name);
+    static boost::shared_ptr< EventLoop > GetEventLoop(const std::string& name);
+
+    //boost::shared_ptr< EventLoop > GetInnerEventLoop(TcpSockSmartPtr sp_tcp);
+    static bool AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp);
 
 private:
-    struct EventLoopWrapper
-    {
-        boost::shared_ptr< EventLoop > eventloop;
-        pthread_t looptid;
-    };
-    typedef std::map<std::string, EventLoopWrapper > EventLoopContainerT;
-    EventLoopContainerT  m_eventloop_pool;
-    core::common::locker m_pool_locker;
-
+    EventLoopPool();
+    ~EventLoopPool();
 };
+
 
 } }
 #endif

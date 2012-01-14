@@ -99,9 +99,9 @@ public:
         {
             return;
         }
-        if(m_evpool.GetEventLoop("postmsg_event_loop"))
+        if(EventLoopPool::GetEventLoop("postmsg_event_loop"))
         {
-            boost::shared_ptr<SockWaiterBase> ev_waiter = m_evpool.GetEventLoop("postmsg_event_loop")->GetEventWaiter();
+            boost::shared_ptr<SockWaiterBase> ev_waiter = EventLoopPool::GetEventLoop("postmsg_event_loop")->GetEventWaiter();
             if(ev_waiter)
             {
                 // find dest host in event loop, if success , we reuse the tcp connect.
@@ -128,7 +128,7 @@ public:
         task.retry = false;
         task.timeout = timeout;
         // sync sendmsg will not retry to update client info if failed to send message.
-        return ProcessReqToReceiver(m_evpool.GetEventLoop("sendmsg_event_loop")->GetEventWaiter(), task, rsp_content);
+        return ProcessReqToReceiver(EventLoopPool::GetEventLoop("sendmsg_event_loop")->GetEventWaiter(), task, rsp_content);
     }
 
     bool PostMsgDirectToClient(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
@@ -159,7 +159,7 @@ public:
             return false;
         }
         boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        m_evpool.CreateEventLoop("sendmsg_event_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("sendmsg_event_loop", spwaiter);
         AddHandler("netmsgbus.server.getclient", &Req2ReceiverMgr::HandleRspGetClient, 0);
         while(!m_req2receiver_running)
         {
@@ -180,8 +180,8 @@ public:
             pthread_join(m_req2receiver_tid, NULL);
         }
         RemoveAllHandlers();
-        m_evpool.TerminateLoop("postmsg_event_loop");
-        m_evpool.TerminateLoop("sendmsg_event_loop");
+        EventLoopPool::TerminateLoop("postmsg_event_loop");
+        EventLoopPool::TerminateLoop("sendmsg_event_loop");
     }
 
 private:
@@ -492,7 +492,7 @@ private:
         }
         req2recv_mgr->m_req2receiver_running = true;
         boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        req2recv_mgr->m_evpool.CreateEventLoop("postmsg_event_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("postmsg_event_loop", spwaiter);
         while(true)
         {
             Req2ReceiverTask rtask;
@@ -553,7 +553,7 @@ private:
     typedef std::deque< Req2ReceiverTask > Req2ReceiverTaskContainerT;
     Req2ReceiverTaskContainerT m_reqtoreceiver_task_container;
 
-    EventLoopPool m_evpool;
+    //EventLoopPool m_evpool;
 
     core::common::condition m_reqtoreceiver_cond;
     core::common::locker    m_reqtoreceiver_locker;

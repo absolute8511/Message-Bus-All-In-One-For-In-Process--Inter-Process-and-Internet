@@ -19,6 +19,21 @@ bool SockWaiterBase::Empty()
     return m_waiting_tcpsocks.empty();
 }
 
+bool SockWaiterBase::IsTcpExist(TcpSockSmartPtr sp_tcp)
+{
+    if(!sp_tcp)
+        return false;
+    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+    TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
+    return (it != m_waiting_tcpsocks.end());
+}
+
+int SockWaiterBase::GetActiveTcpNum()
+{
+    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+    return m_waiting_tcpsocks.size();
+}
+
 bool SockWaiterBase::AddTcpSock(TcpSockSmartPtr sp_tcp)
 {
     if(!sp_tcp)
@@ -28,6 +43,10 @@ bool SockWaiterBase::AddTcpSock(TcpSockSmartPtr sp_tcp)
     if(it == m_waiting_tcpsocks.end())
     {
         m_waiting_tcpsocks.push_back(sp_tcp);
+    }
+    else
+    {
+        printf("dunplicate tcp not added.\n");
     }
     return true;
 }

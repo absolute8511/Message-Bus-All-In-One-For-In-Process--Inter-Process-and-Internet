@@ -234,15 +234,15 @@ void* msgbus_server_accept_thread( void* param )
     int max_sockfd = server_sockfd;
     available_services.clear();
     active_clients.clear();
-
-#if defined (__APPLE__) || defined (__MACH__) 
-    boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
-#else
-    //boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
-    boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
-#endif
-    EventLoopPool evpool;
-    evpool.CreateEventLoop("server_accept_loop", spwaiter);
+//
+//#if defined (__APPLE__) || defined (__MACH__) 
+//    boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+//#else
+//    //boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+//    boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
+//#endif
+//    EventLoopPool evpool;
+//    evpool.CreateEventLoop("server_accept_loop", spwaiter);
     SockHandler tcpcb;
     tcpcb.onRead = boost::bind(server_onRead, _1, _2, _3);
     tcpcb.onSend = boost::bind(server_onSend, _1);
@@ -315,7 +315,8 @@ void* msgbus_server_accept_thread( void* param )
                 sp_tcp->SetCloseAfterExec();
                 sp_tcp->SetSockHandler(tcpcb);
                 sp_tcp->SetTimeout(KEEP_ALIVE_TIME);
-                spwaiter->AddTcpSock(sp_tcp);
+                EventLoopPool::AddTcpSockToInnerLoop(sp_tcp);
+                //spwaiter->AddTcpSock(sp_tcp);
                 std::string ip;
                 unsigned short int port;
                 sp_tcp->GetDestHost(ip, port);
@@ -325,7 +326,7 @@ void* msgbus_server_accept_thread( void* param )
         }
     }
     close(server_sockfd);
-    evpool.TerminateLoop("server_accept_loop");
+    EventLoopPool::TerminateLoop("server_accept_loop");
     s_netmsgbus_server_running = false;
     return 0;
 }

@@ -26,6 +26,8 @@ public:
     bool Empty();
     // wait for ready event you has set cared about, every time you call wait will clear old ready event. 
     virtual int  Wait(TcpSockContainerT& allready, struct timeval& tv) = 0;
+    bool IsTcpExist(TcpSockSmartPtr sp_tcp);
+    int GetActiveTcpNum();
 protected:
     void ClearClosedTcpSock();
     TcpSockContainerT  m_waiting_tcpsocks;
