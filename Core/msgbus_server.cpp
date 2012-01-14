@@ -918,6 +918,7 @@ int main(int argc, char* argv[])
     pthread_join(register_thread, NULL);
     pthread_join(process_thread, NULL);
 
+    EventLoopPool::DestroyEventLoopPool();
     g_log.Log(lv_debug, "msgbus server is down!");
     threadpool::destroy_thread_pool();
 
