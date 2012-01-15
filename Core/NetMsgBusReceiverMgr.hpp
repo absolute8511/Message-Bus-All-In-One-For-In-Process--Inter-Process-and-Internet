@@ -4,11 +4,11 @@
 #include "NetMsgBusUtility.hpp"
 #include "EventLoopPool.h"
 
-#if defined (__APPLE__) || defined (__MACH__) 
-#include "SelectWaiter.h"
-#else
-#include "EpollWaiter.h"
-#endif
+//#if defined (__APPLE__) || defined (__MACH__) 
+//#include "SelectWaiter.h"
+//#else
+//#include "EpollWaiter.h"
+//#endif
 
 #include "TcpSock.h"
 #include "CommonUtility.hpp"
@@ -135,12 +135,12 @@ private:
         callback.onError = boost::bind(&ReceiverMgr::receiver_onError, recv_mgr, _1);
         callback.onTimeout = boost::bind(&ReceiverMgr::receiver_onTimeout, recv_mgr, _1);
 
-#if defined (__APPLE__) || defined (__MACH__) 
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-#else
-        boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
-#endif
-        EventLoopPool::CreateEventLoop("msg_receiver_loop", spwaiter);
+//#if defined (__APPLE__) || defined (__MACH__) 
+//        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
+//#else
+//        boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
+//#endif
+        //EventLoopPool::CreateEventLoop("msg_receiver_loop", spwaiter);
         // 这里先将正准备接收数据标记置位，如果注册接收服务失败，会把该标记位清除
         recv_mgr->m_receiver_running = true;
         //printf("client receiver waiting msgs from clients ...\n");
@@ -193,12 +193,13 @@ private:
                     newtcp->SetNonBlock();
                     newtcp->SetCloseAfterExec();
                     newtcp->SetTimeout(KEEP_ALIVE_TIME);
-                    spwaiter->AddTcpSock(newtcp);
+                    EventLoopPool::AddTcpSockToInnerLoop(newtcp);
+                    //spwaiter->AddTcpSock(newtcp);
                 }
             }
         }
         close(receive_server_sockfd);
-        EventLoopPool::TerminateLoop("msg_receiver_loop");
+        //EventLoopPool::TerminateLoop("msg_receiver_loop");
         recv_mgr->m_receiver_running = false;
         return 0;
     }
