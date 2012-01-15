@@ -156,6 +156,7 @@ public:
     }
     void StopServerConnection()
     {
+        UnRegisterNetMsgBusReceiver();
         //EventLoopPool::TerminateLoop("server_connect_loop");
         if(m_server_tcp)
             m_server_tcp->DisAllowSend();

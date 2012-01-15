@@ -604,6 +604,8 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
                 it->second.erase(pos);
                 g_log.Log(lv_debug,"unregister server host is %s:%d", 
                     inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
+                if(it->second.empty())
+                    available_services.erase(it);
             }
         }
     }

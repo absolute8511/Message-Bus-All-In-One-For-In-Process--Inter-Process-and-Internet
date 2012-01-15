@@ -88,13 +88,12 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
     {
         if(it->second.eventloop)
         {
-            if(it->second.eventloop->IsTcpExist(sp_tcp))
+            if(it->second.eventloop->GetActiveTcpNum() < MAX_TCPNUM)
             {
-                g_log.Log(lv_debug, "duplicate tcp not added.");
-                return true;
+                addedev = it->second.eventloop;
+                break;
             }
         }
-        addedev = it->second.eventloop;
         ++it;
     }
     if(addedev == NULL || addedev->GetActiveTcpNum() > MAX_TCPNUM)

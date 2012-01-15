@@ -307,6 +307,9 @@ void testremotemsgbus()
 
     NetMsgBusQueryServices("");
 
+    bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
+    assert(ret);
+
     MyMsgHandlerClassPtr thandlerobj;
     MsgHandlerMgr::GetInstance(thandlerobj);
     if(inputflag == 'a' || inputflag == 'b' || inputflag == 'c')
@@ -354,8 +357,6 @@ void testremotemsgbus()
         MsgBusParam param = CustomType2Param(xp);
         uint32_t sendcounter = 0;
 
-        bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
-        assert(ret);
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
         int mintimeout = 1;
@@ -430,6 +431,8 @@ void testremotemsgbus()
 
     while(true)
     {
+        if(s_break)
+            break;
         sleep(1);
     }
     NetMsgBusDisConnect();
