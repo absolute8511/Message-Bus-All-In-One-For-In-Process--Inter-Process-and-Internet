@@ -553,8 +553,8 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
     //
     // until I know, all implementation of std::string's storage is contiguous. 
     errmsg.push_back('\0');
-    rsp.err_msg = &errmsg[0];
-    rsp.err_msg[rsp.err_msg_len - 1] = '\0';
+    rsp.err_msg_len = errmsg.size();
+    rsp.SetVarData( &errmsg[0] );
 
     boost::shared_array<char> outbuffer( new char[rsp.Size()] );
     rsp.PackData(outbuffer.get());
@@ -614,13 +614,13 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
 void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusSendMsgReq req;
-    assert(body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
-    boost::shared_array<char> msg_content_buf(new char[body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
-    req.msg_content = msg_content_buf.get();
-    req.UnPackBody(bodybuffer.get());
+    //assert(body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
+    //boost::shared_array<char> msg_content_buf(new char[body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
+    //req.msg_content = msg_content_buf.get();
+    req.UnPackBody(bodybuffer.get(), body_len);
     string dest_name(req.dest_name);
     g_log.Log(lv_debug, "server relay sendmsg from client:%s, content:%s. dest:%s", 
-        string(req.from_name).c_str(), req.msg_content, dest_name.c_str());
+        string(req.from_name).c_str(), req.GetMsgContent(), dest_name.c_str());
     // support the prefix matching of client_name , so we can send messages to group of clients.
     bool is_exist = false;
     {
@@ -681,8 +681,9 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
     //strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
 
     // until I know, all implementation of std::string's storage is contiguous. 
-    rsp.err_msg = &errmsg[0];
-    rsp.err_msg[rsp.err_msg_len - 1] = '\0';
+    errmsg.push_back('\0');
+    rsp.err_msg_len = errmsg.size();
+    rsp.SetVarData( &errmsg[0] );
 
     boost::shared_array<char> rspbuffer(new char[rsp.Size()]);
     rsp.PackData(rspbuffer.get());
@@ -722,14 +723,14 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
 void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusPackPBType pbbody;
-    boost::shared_array<char> tempbuf(new char[body_len]);
-    boost::shared_array<char> tempbuf2(new char[body_len]);
+    //boost::shared_array<char> tempbuf(new char[body_len]);
+    //boost::shared_array<char> tempbuf2(new char[body_len]);
 
-    pbbody.pbdata = tempbuf.get();
-    pbbody.pbtype = tempbuf2.get();
+    //pbbody.pbdata = tempbuf.get();
+    //pbbody.pbtype = tempbuf2.get();
     pbbody.UnPackBody(bodybuffer.get(), body_len);
-    string pbtype(pbbody.pbtype);
-    string pbdata(pbbody.pbdata, pbbody.pbdata_len);
+    string pbtype(pbbody.GetPBType());
+    string pbdata(pbbody.GetPBData(), pbbody.pbdata_len);
     PBHandlerContainerT::const_iterator cit = s_pb_handlers.find(pbtype);
     if(cit != s_pb_handlers.end())
     {
@@ -761,15 +762,15 @@ void onQueryServicesReq(TcpSockSmartPtr sp_tcp, PBQueryServicesReq* req)
     }
     MsgBusPackPBType packpb;
     std::string pbtype = PBQueryServicesRsp::descriptor()->full_name();
+    pbtype.push_back('\0');
     packpb.pbtype_len = pbtype.size();
     // until I know, all implementation of std::string's storage is contiguous. 
-    packpb.pbtype = &pbtype[0];
     int size = rsp.ByteSize();
     boost::shared_array<char> pbdata(new char[size]);
     rsp.SerializeToArray(pbdata.get(), size);
     g_log.Log(lv_debug, "rsp query services : %s", std::string(pbdata.get(), size).c_str());
     packpb.pbdata_len = size; 
-    packpb.pbdata = pbdata.get();
+    packpb.SetVarData(&pbtype[0], pbdata.get());
 
     boost::shared_array<char> outbuffer( new char[packpb.Size()] );
     packpb.PackData(outbuffer.get(), packpb.Size());

@@ -134,13 +134,12 @@ class MsgBusRegisterRsp : public MsgBusPackHeadRsp
 public:
     MsgBusRegisterRsp()
         :MsgBusPackHeadRsp(RSP_REGISTER),
-        err_msg_len(0)
+        err_msg_len(0),
+        needfree(false)
     {
     }
 
-    ~MsgBusRegisterRsp()
-    {
-    }
+    ~MsgBusRegisterRsp();
 private:
     MsgBusRegisterRsp(const MsgBusRegisterRsp&);
 public:
@@ -149,10 +148,23 @@ public:
     int UnPackBody(const char *data, size_t len = 0);
     int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
+    const char* GetErrMsg() const
+    {
+        return err_msg;
+    }
+    void SetVarData(char* var_err_msg)
+    {
+        FreeVarData();
+        err_msg = var_err_msg;
+        needfree = false;
+    }
+    void FreeVarData();
     uint16_t ret_code;
     char   service_name[MAX_SERVICE_NAME];
     uint16_t err_msg_len;
+private:
     char * err_msg;
+    bool  needfree;
 };
 
 class MsgBusUnRegisterReq : public MsgBusPackHeadReq
@@ -253,60 +265,112 @@ class MsgBusSendMsgReq : public MsgBusPackHeadReq
 {
 public:
     MsgBusSendMsgReq()
-        :MsgBusPackHeadReq(REQ_SENDMSG)
+        :MsgBusPackHeadReq(REQ_SENDMSG),
+        needfree(false)
     {
     }
 
+    ~MsgBusSendMsgReq();
     void PackBody(char *data, size_t len = 0);
     void PackData(char *data, size_t len = 0);
     int UnPackBody(const char *data, size_t len = 0);
     int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
+    const char* GetMsgContent() const
+    {
+        return msg_content;
+    }
+    void SetVarData(char* var_msg_content)
+    {
+        FreeVarData();
+        msg_content = var_msg_content;
+        needfree = false;
+    }
+    void FreeVarData();
 
     char dest_name[MAX_SERVICE_NAME];
     char from_name[MAX_SERVICE_NAME];
     uint32_t msg_id;
     uint32_t msg_len;
+private:
     char * msg_content;
+    bool needfree;
 };
 
 class MsgBusSendMsgRsp : public MsgBusPackHeadRsp
 {
 public:
     MsgBusSendMsgRsp()
-        :MsgBusPackHeadRsp(RSP_SENDMSG)
+        :MsgBusPackHeadRsp(RSP_SENDMSG),
+        needfree(false)
     {
     }
 
+    ~MsgBusSendMsgRsp();
     void PackBody(char * data, size_t len = 0);
     void PackData(char *data, size_t len = 0);
     int UnPackBody(const char *data, size_t len = 0);
     int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
+    const char* GetErrMsg() const
+    {
+        return err_msg;
+    }
+    void SetVarData(char* var_err_msg)
+    {
+        FreeVarData();
+        err_msg = var_err_msg;
+        needfree = false;
+    }
+    void FreeVarData();
 
     uint16_t ret_code;
     uint32_t msg_id;
     uint16_t err_msg_len;
+private:
     char * err_msg;
+    bool needfree;
 };
 
 class MsgBusPackPBType:public MsgBusPackHead
 {
 public:
     MsgBusPackPBType()
-        :MsgBusPackHead(0, BODY_PBTYPE)
+        :MsgBusPackHead(0, BODY_PBTYPE),
+        pbtype(0),
+        pbdata(0),
+        needfree(false)
     {
     }
+    ~MsgBusPackPBType();
     void PackBody(char * data, size_t len = 0);
     void PackData(char *data, size_t len = 0);
     int UnPackBody(const char *data, size_t len = 0);
     int UnPackData(const char *data, size_t len = 0);
     uint32_t Size();
+    void SetVarData(char* var_pbtype, char* var_pbdata)
+    {
+        FreeVarData();
+        pbtype = var_pbtype;
+        pbdata = var_pbdata;
+        needfree = false;
+    }
+    const char* GetPBType() const
+    {
+        return pbtype;
+    }
+    const char* GetPBData() const
+    {
+        return pbdata;
+    }
+    void FreeVarData();
 
     int32_t   pbtype_len;
-    char*     pbtype;
     int32_t   pbdata_len;
+private:
+    char*     pbtype;
     char*     pbdata;
+    bool  needfree;
 };
 
 

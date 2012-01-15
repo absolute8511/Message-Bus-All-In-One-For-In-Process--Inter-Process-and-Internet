@@ -364,9 +364,9 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            //GenerateNextTestParam(param);
+            GenerateNextTestParam(param);
             // 测试广播消息
-            //NetMsgBusSendMsg("", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+            NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             //NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
             //GenerateNextTestParam(param);
@@ -381,20 +381,20 @@ void testremotemsgbus()
             GenerateNextTestParam(param);
             // 测试向指定的接收者发送消息
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             sendcounter++;
             //if(sendcounter % 100 == 0)
             //{
             printf("{%d}\n ", sendcounter);
             //}
-            //GenerateNextTestParam(param);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+            GenerateNextTestParam(param);
+            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-            //GenerateNextTestParam(param);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            GenerateNextTestParam(param);
+            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             
             GenerateNextTestParam(param);

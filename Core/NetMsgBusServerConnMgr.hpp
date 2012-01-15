@@ -30,6 +30,44 @@ using namespace core;
 
 namespace NetMsgBus 
 {
+
+class PBHandlerBase
+{
+public:
+    virtual ~PBHandlerBase(){};
+    virtual void onPbData(const string& pbtype, const string& pbdata) const = 0;
+};
+
+template <typename T> class PBHandlerT: public PBHandlerBase
+{
+public:
+    typedef boost::function<void(T*)> PBHandlerCB;
+    PBHandlerT(const PBHandlerCB& cb)
+        :cb_(cb)
+    {
+    }
+    virtual void onPbData(const string& pbtype, const string& pbdata) const
+    {
+        const google::protobuf::DescriptorPool* pool = google::protobuf::DescriptorPool::generated_pool();
+        const google::protobuf::Descriptor* desp = pool->FindMessageTypeByName(pbtype);
+        const google::protobuf::Message* prototype = google::protobuf::MessageFactory::generated_factory()->GetPrototype(desp);
+        if(prototype)
+        {
+            google::protobuf::Message* msg = prototype->New();
+            if(msg->ParseFromArray(pbdata.data(), pbdata.size()))
+            {
+                T *t = dynamic_cast<T*>(msg);
+                assert(cb_ != NULL);
+                cb_(t);
+            }
+        }
+    }
+private:
+    PBHandlerCB cb_;
+};
+
+typedef std::map<string, boost::shared_ptr<PBHandlerBase> > PBHandlerContainerT;
+
 // the server connection of the local message receiver client, each receiver will hold one 
 // server connection to communicate some control message with the message bus server.
 class ServerConnMgr
@@ -46,7 +84,8 @@ public:
         m_allrsphandlers[RSP_UNREGISTER] = &ServerConnMgr::HandleRspUnRegister;
         m_allrsphandlers[REQ_SENDMSG] = &ServerConnMgr::HandleReqSendMsg;
         m_allrsphandlers[RSP_CONFIRM_ALIVE] = &ServerConnMgr::HandleRspConfirmAlive;
-        m_allrsphandlers[BODY_PBTYPE] = &ServerConnMgr::HandleRspQueryServices;
+        m_allrsphandlers[BODY_PBTYPE] = &ServerConnMgr::HandleRspPBBody;
+        regist_pbdata_handler<NetMsgBus::PBQueryServicesRsp>(boost::bind(&ServerConnMgr::HandleQueryServicesRsp, this, _1));
     }
     ~ServerConnMgr()
     {
@@ -189,11 +228,11 @@ public:
     {
         // register has success.
         MsgBusRegisterRsp reg_rsp;
-        assert((rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME) > 0);
-        boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME]);
+        //assert((rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME) > 0);
+        //boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME]);
 
-        reg_rsp.err_msg = msgbuf.get();
-        reg_rsp.UnPackBody(rsp_body.data());
+        //reg_rsp.err_msg = msgbuf.get();
+        reg_rsp.UnPackBody(rsp_body.data(), rsp_body.size());
         boost::shared_array<char>  rspdata(new char[MAX_SERVICE_NAME]);
         strncpy(rspdata.get(), reg_rsp.service_name, MAX_SERVICE_NAME);
         if(reg_rsp.ret_code == 0)
@@ -227,31 +266,31 @@ public:
     void HandleRspSendMsg(const std::string& rsp_body)
     {// 本客户端通过服务器向其他客户端转发消息得到的服务器返回确认
         MsgBusSendMsgRsp rsp;
-        assert(rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len));
-        boost::shared_array<char> err_msg_buf(new char[rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len)]);
-        rsp.err_msg = err_msg_buf.get();
-        rsp.UnPackBody(rsp_body.data());
+        //assert(rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len));
+        //boost::shared_array<char> err_msg_buf(new char[rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len)]);
+        //rsp.err_msg = err_msg_buf.get();
+        rsp.UnPackBody(rsp_body.data(), rsp_body.size());
         if(rsp.ret_code == 0)
         {
         }
         else
         {
-            g_log.Log(lv_debug, "send msg by server error: %d, errmsg: %s.", rsp.ret_code, std::string(rsp.err_msg).c_str());
+            g_log.Log(lv_debug, "send msg by server error: %d, errmsg: %s.", rsp.ret_code, std::string(rsp.GetErrMsg()).c_str());
         }
     }
     void HandleReqSendMsg(const std::string& rsp_body)
     {// 收到服务器转发的其他客户端的发消息请求
         MsgBusSendMsgReq req;
-        assert(rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
-        boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
-        req.msg_content = msgbuf.get();
-        req.UnPackBody(rsp_body.data());
+        //assert(rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
+        //boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
+        //req.msg_content = msgbuf.get();
+        req.UnPackBody(rsp_body.data(), rsp_body.size());
         if(!FilterMgr::FilterBySender(req.from_name))
         {
             g_log.Log(lv_debug, "filter by sender: %s while got message from server relay.", req.from_name);
             return;
         }
-        std::string msg_str(req.msg_content, req.msg_len);
+        std::string msg_str(req.GetMsgContent(), req.msg_len);
         NetMsgBusToLocalMsgBus(msg_str);
     }
     void HandleRspUnRegister(const std::string& rsp_body)
@@ -259,28 +298,45 @@ public:
         // unregister from msgbus server, receiver should shutdown, but we can still sendmsg.
         //s_server_connecting = false;
     }
-    void HandleRspQueryServices(const std::string& rsp_body)
+    void HandleRspPBBody(const std::string& rsp_body)
     {
         g_log.Log(lv_debug, "query services response:%s", rsp_body.c_str());
         MsgBusPackPBType pbpack;
-        boost::shared_array<char> tmpbuf(new char[rsp_body.size()]);
-        pbpack.pbtype = tmpbuf.get();
-        boost::shared_array<char> tmpbuf2(new char[rsp_body.size()]);
-        pbpack.pbdata = tmpbuf.get();
+        //boost::shared_array<char> tmpbuf(new char[rsp_body.size()]);
+        //pbpack.pbtype = tmpbuf.get();
+        //boost::shared_array<char> tmpbuf2(new char[rsp_body.size()]);
+        //pbpack.pbdata = tmpbuf2.get();
 
-        pbpack.UnPackBody(rsp_body.data());
-        PBQueryServicesRsp pbrsp;
-        pbrsp.ParseFromArray(pbpack.pbdata, pbpack.pbdata_len);
+        pbpack.UnPackBody(rsp_body.data(), rsp_body.size());
+        string pbtype(pbpack.GetPBType());
+        string pbdata(pbpack.GetPBData(), pbpack.pbdata_len);
+        PBHandlerContainerT::const_iterator cit = m_pb_handlers.find(pbtype);
+        if(cit != m_pb_handlers.end())
+        {
+            cit->second->onPbData(pbtype, pbdata);
+        }
+        else
+        {
+            g_log.Log(lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
+        }
+
+    }
+
+    void HandleQueryServicesRsp(PBQueryServicesRsp* pbrsp)
+    {
         std::string service_name;
 
-        google::protobuf::RepeatedPtrField<std::string>::const_iterator cit = pbrsp.service_name().begin();
-        while(cit != pbrsp.service_name().end())
+        google::protobuf::RepeatedPtrField<std::string>::const_iterator cit = pbrsp->service_name().begin();
+        while(cit != pbrsp->service_name().end())
         {
             service_name += *cit + ",";
             ++cit;
         }
+        PostMsg("netmsgbus.server.queryservice.rsp", CustomType2Param(service_name));
         g_log.Log(lv_debug, "all available services:%s", service_name.c_str());
+        printf("all available services:%s\n", service_name.c_str());
     }
+
     void HandleUnknown(const std::string& rsp_body)
     {
         g_log.Log(lv_warn, "receive a unknown rsp from msgbus server.");
@@ -376,7 +432,7 @@ public:
         //printf("server tick msgid %u, (tick %ld). sendmsg use server relay from:%s\n",
         //    sendmsg_req.msg_id, core::utility::GetTickCount(), m_receiver_name.c_str());
         sendmsg_req.msg_len = data_len;
-        sendmsg_req.msg_content = data.get();
+        sendmsg_req.SetVarData( data.get() );
         boost::shared_array<char> req_data(new char[sendmsg_req.Size()]);
         sendmsg_req.PackData(req_data.get());
         assert(m_server_tcp);
@@ -420,12 +476,13 @@ public:
         std::string pbtype = PBQueryServicesReq::descriptor()->full_name();
         services_query.pbtype_len = pbtype.size() + 1;
         pbtype.push_back('\0');
-        services_query.pbtype = &pbtype[0];
         int pbsize = pbreq.ByteSize();
         boost::shared_array<char> pbdata(new char[pbsize]);
         pbreq.SerializeToArray(pbdata.get(), pbsize);
         services_query.pbdata_len = pbsize;
-        services_query.pbdata = pbdata.get();
+
+        services_query.SetVarData(&pbtype[0], pbdata.get());
+        
         boost::shared_array<char> req_data(new char[services_query.Size()]);
         services_query.PackData(req_data.get());
         assert(m_server_tcp);
@@ -435,6 +492,12 @@ public:
     }
 
 private:
+    template<typename T> void regist_pbdata_handler(const typename PBHandlerT<T>::PBHandlerCB& cb)
+    {
+        boost::shared_ptr<PBHandlerT<T> > pbh(new PBHandlerT<T>(cb));
+        m_pb_handlers[T::descriptor()->full_name()] = pbh;
+    }
+
     //EventLoopPool m_evpool;
     TcpSockSmartPtr m_server_tcp;
     std::string m_serverip;
@@ -451,6 +514,7 @@ private:
     RspBodyHandlerContainerT  m_allrsphandlers;
     const static int KEEP_ALIVE_TIME = 30000; // server is 120000, here we half it to keep tcp alive
     LoggerCategory g_log;
+    PBHandlerContainerT m_pb_handlers;
 };
 }
 #endif// end of NETMSGBUS_SERVER_CONNMGR

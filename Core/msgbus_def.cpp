@@ -164,6 +164,23 @@ uint32_t MsgBusRegisterReq::Size()
 //    return MsgBusPackHeadReq::Size() + MAX_SERVICE_NAME + sizeof(service_host);
 }
 
+MsgBusRegisterRsp::~MsgBusRegisterRsp()
+{
+    FreeVarData();
+}
+
+void MsgBusRegisterRsp::FreeVarData()
+{
+    if(needfree)
+    {
+        if(err_msg)
+        {
+            delete[] err_msg;
+            err_msg = NULL;
+        }
+    }
+}
+
 void MsgBusRegisterRsp::PackBody(char *data, size_t len)
 {
     if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
@@ -189,16 +206,21 @@ void MsgBusRegisterRsp::PackData(char *data, size_t len)
 }
 int MsgBusRegisterRsp::UnPackBody(const char *data, size_t len)
 {
-    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
-        throw;
     const char *p = data;
     try{
+    if( (len != 0) && (len < (sizeof(ret_code) + MAX_SERVICE_NAME + sizeof(err_msg_len))))
+        return -1;
     ret_code = *((uint16_t*)p);
     p += sizeof(ret_code);
     strncpy(service_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     err_msg_len = *((uint16_t *)p);
     p += sizeof(err_msg_len);
+    if( (len != 0) && (len < (sizeof(ret_code) + MAX_SERVICE_NAME + sizeof(err_msg_len) + err_msg_len)))
+        return -1;
+    FreeVarData();
+    needfree = true;
+    err_msg = new char[err_msg_len];
     strncpy(err_msg, p, err_msg_len);
     return 0;
     }
@@ -209,8 +231,6 @@ int MsgBusRegisterRsp::UnPackBody(const char *data, size_t len)
 }
 int MsgBusRegisterRsp::UnPackData(const char *data, size_t len)
 {
-    if( (len != 0) && (len < Size()))
-        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_REGISTER )
@@ -516,6 +536,23 @@ uint32_t MsgBusGetClientRsp::Size()
     return sizeof(MsgBusGetClientRsp);
 }
 
+MsgBusSendMsgReq::~MsgBusSendMsgReq()
+{
+    FreeVarData();
+}
+
+void MsgBusSendMsgReq::FreeVarData()
+{
+    if(needfree)
+    {
+        if(msg_content)
+        {
+            delete msg_content;
+            msg_content = NULL;
+        }
+    }
+}
+
 void MsgBusSendMsgReq::PackBody(char *data, size_t len)
 {
     if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
@@ -543,10 +580,10 @@ void MsgBusSendMsgReq::PackData(char *data, size_t len)
 }
 int MsgBusSendMsgReq::UnPackBody(const char *data, size_t len)
 {
-    if( (len != 0) && (len < (Size() - MsgBusPackHeadReq::Size())))
-        throw;
     const char *p = data;
     try{
+    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_id) + sizeof(msg_len) ))
+        return -1;
     strncpy(dest_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     strncpy(from_name, p, MAX_SERVICE_NAME);
@@ -555,7 +592,11 @@ int MsgBusSendMsgReq::UnPackBody(const char *data, size_t len)
     p += sizeof(msg_id);
     msg_len = *((uint32_t*)p);
     p += sizeof(msg_len);
-    //printf("sendmsg msg_len = %u,\n", msg_len);
+    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_id) + sizeof(msg_len) + msg_len))
+        return -1;
+    FreeVarData();
+    needfree = true;
+    msg_content = new char[msg_len];
     memcpy(msg_content, p, msg_len);
     return 0;
     }
@@ -566,8 +607,6 @@ int MsgBusSendMsgReq::UnPackBody(const char *data, size_t len)
 }
 int MsgBusSendMsgReq::UnPackData(const char *data, size_t len)
 {
-    if( (len != 0) && (len < Size()))
-        throw;
     const char *p = data;
     try{
     if ( UnPackReqHead(p) >= 0 && body_type == REQ_SENDMSG )
@@ -587,6 +626,23 @@ uint32_t MsgBusSendMsgReq::Size()
 //    return sizeof(MsgBusSendMsgReq);
     return MsgBusPackHeadReq::Size() + 2*MAX_SERVICE_NAME + sizeof(msg_id) + 
         sizeof(msg_len) + msg_len;
+}
+
+MsgBusSendMsgRsp::~MsgBusSendMsgRsp()
+{
+    FreeVarData();
+}
+
+void MsgBusSendMsgRsp::FreeVarData()
+{
+    if(needfree)
+    {
+        if(err_msg)
+        {
+            delete[] err_msg;
+            err_msg = 0;
+        }
+    }
 }
 
 void MsgBusSendMsgRsp::PackBody(char *data, size_t len)
@@ -614,16 +670,25 @@ void MsgBusSendMsgRsp::PackData(char *data, size_t len)
 }
 int MsgBusSendMsgRsp::UnPackBody(const char *data, size_t len)
 {
-    if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
-        throw;
     const char *p = data;
     try{
+    if( (len != 0) && (len < sizeof(ret_code)))
+        return -1;
     ret_code = *((uint16_t*)p);
     p += sizeof(ret_code);
+    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id)))
+        return -1;
     msg_id = *((uint32_t*)p);
     p += sizeof(msg_id);
+    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len)))
+        return -1;
     err_msg_len = *((uint32_t*)p);
     p += sizeof(err_msg_len);
+    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len) + err_msg_len))
+        return -1;
+    FreeVarData();
+    needfree = true;
+    err_msg = new char[err_msg_len];
     strncpy(err_msg, p, err_msg_len);
     return 0;
     }
@@ -634,8 +699,6 @@ int MsgBusSendMsgRsp::UnPackBody(const char *data, size_t len)
 }
 int MsgBusSendMsgRsp::UnPackData(const char *data, size_t len)
 {
-    if( (len != 0) && (len < Size()))
-        throw;
     const char *p = data;
     try{
     if ( UnPackRspHead(p) >= 0 && body_type == RSP_SENDMSG )
@@ -654,6 +717,29 @@ uint32_t MsgBusSendMsgRsp::Size()
 {
     return MsgBusPackHeadRsp::Size() + sizeof(ret_code) + sizeof(msg_id) + 
         sizeof(err_msg_len) + err_msg_len;
+}
+
+MsgBusPackPBType::~MsgBusPackPBType()
+{
+    FreeVarData();
+}
+
+void MsgBusPackPBType::FreeVarData()
+{
+    if(needfree)
+    {
+        if(pbtype)
+        {
+            delete[] pbtype;
+            pbtype = NULL;
+        }
+        if(pbdata)
+        {
+            delete[] pbdata;
+            pbdata = NULL;
+        }
+    }
+    needfree = false;
 }
 
 void MsgBusPackPBType::PackBody(char *data, size_t len)
@@ -691,6 +777,11 @@ int MsgBusPackPBType::UnPackBody(const char *data, size_t len)
     p += sizeof(pbtype_len);
     if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len) )
         return -1;
+
+    FreeVarData();
+    needfree = true;
+
+    pbtype = new char[pbtype_len];
     strncpy(pbtype, p, pbtype_len);
     p += pbtype_len;
     if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len + sizeof(pbdata_len)) )
@@ -699,6 +790,7 @@ int MsgBusPackPBType::UnPackBody(const char *data, size_t len)
     if( (len != 0) && (len < (Size() - MsgBusPackHead::Size())))
         return -1;
     p += sizeof(pbdata_len);
+    pbdata = new char[pbdata_len];
     memcpy(pbdata, p, pbdata_len);
     return 0;
     }
