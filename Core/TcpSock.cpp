@@ -281,7 +281,15 @@ void TcpSock::HandleEvent()
                 }
                 if(n > 0)
                 {
-                    m_inbuf.erase(m_inbuf.begin(), m_inbuf.begin() + n);
+                    if(n > m_inbuf.size())
+                    {
+                        g_log.Log(lv_debug, "you should not close directly in onRead handler.");
+                        m_inbuf.clear();
+                    }
+                    else
+                    {
+                        m_inbuf.erase(m_inbuf.begin(), m_inbuf.begin() + n);
+                    }
                 }
             }
             else
