@@ -112,6 +112,8 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     }
     for(int i = 0; i < retfds; i++)
     {
+        if(events[i].data.fd == m_notify_pipe[0])
+            continue;
         TcpSockSmartPtr sptcp = tcpsocks_tmpmap[events[i].data.fd];
         assert(sptcp);
         sptcp->ClearEvent();
