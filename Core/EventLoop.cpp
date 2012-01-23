@@ -49,6 +49,8 @@ bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
 void EventLoop::TerminateLoop()
 {
     m_terminal = true;
+    if(m_event_waiter)
+        m_event_waiter->NotifyNewActive(TERMINATE);
 }
 
 int EventLoop::GetActiveTcpNum()
@@ -105,7 +107,7 @@ void* EventLoop::Loop(void* param)
     while(true)
     {
         struct timeval tv;
-        tv.tv_sec = 0; //TIMEOUT_SHORT;
+        tv.tv_sec = 1; //TIMEOUT_SHORT;
         tv.tv_usec = 100000;
 
         if(el->m_terminal)

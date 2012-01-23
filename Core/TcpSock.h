@@ -11,7 +11,7 @@
 #include <boost/enable_shared_from_this.hpp>
 
 namespace core { namespace net {
-
+class SockWaiterBase;
 class TcpSock : private boost::noncopyable, public boost::enable_shared_from_this<TcpSock>
 {
 public:
@@ -46,6 +46,7 @@ public:
     void RenewTimeout();
     // 服务端需要有主动关闭,因此改成public
     void  Close();
+    void  SetSockWaiter(SockWaiterBase* pwaiter);
 private:
     void  ShutDownWrite();
     // 每个fd都有2个缓冲区,一个输入,一个输出, 必须使用连续内存, 因此deque不能使用(deque分块连续)
@@ -76,6 +77,7 @@ private:
     int  m_timeout_ms;
     int  m_timeout_renew;
     bool m_is_timeout_need;
+    SockWaiterBase* m_pwaiter;
 };
 
 typedef boost::shared_ptr< TcpSock > TcpSockSmartPtr;

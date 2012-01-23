@@ -75,6 +75,14 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
             maxfd = fd;
         ++cit;
     }
+    if(m_notify_pipe[0] != 0)
+    {
+        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
+        ev.data.fd = m_notify_pipe[0];
+        epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_notify_pipe[0], &ev);
+        if(m_notify_pipe[0] > maxfd)
+            maxfd = m_notify_pipe[0];
+    }
     // the document said: the fd will be removed automatically when the fd is closed.
     int ms = tv.tv_usec/1000 + tv.tv_sec*1000;
     int retfds = ::epoll_wait(m_epfd, events, EPOLL_QUEUE_LEN, ms);
@@ -85,6 +93,7 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         g_log.Log(lv_error, "error happened while epoll wait");
         return retfds;
     }
+    GetAndClearNotify();
     //if(retfds == 0 && writetimeout_detect)
     //{
     //    printf("warning: wait to send data timeout, network may broken, data is not sended.\n");

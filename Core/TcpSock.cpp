@@ -1,6 +1,7 @@
 #include "TcpSock.h"
 #include "CommonUtility.hpp"
 #include "SimpleLogger.h"
+#include "SockWaiterBase.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <map>
@@ -26,7 +27,8 @@ TcpSock::TcpSock()
     m_isclosed(true),
     m_alive_counter(-1),
     m_timeout_ms(-1),
-    m_is_timeout_need(false)
+    m_is_timeout_need(false),
+    m_pwaiter(NULL)
 {
     tmpbuf.reset(new char[BLOCK_SIZE]);
 }
@@ -37,7 +39,8 @@ TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
     m_isclosed(false),
     m_alive_counter(ALIVE_NUM),
     m_timeout_ms(-1),
-    m_is_timeout_need(false)
+    m_is_timeout_need(false),
+    m_pwaiter(NULL)
 {
     m_desthost.host_ip = ip;
     m_desthost.host_port = port;
@@ -208,6 +211,11 @@ bool TcpSock::SendData(const char* pdata, size_t size)
                 m_errno = EPIPE;
                 return false;
             }
+            // notify the waiter to wake up the select.
+            if(m_pwaiter)
+            {
+                m_pwaiter->NotifyNewActive(NEEDWRITE);
+            }
             if( (m_tmpoutbuf.size() > MAX_BUF_SIZE) || ((m_tmpoutbuf.size() + size) > MAX_BUF_SIZE) )
             {
                 m_errno = 0;
@@ -227,6 +235,11 @@ bool TcpSock::SendData(const char* pdata, size_t size)
 void TcpSock::SetSockHandler(const SockHandler& cb)
 {
     m_sockcb = cb;
+}
+
+void TcpSock::SetSockWaiter(SockWaiterBase* pwaiter)
+{
+    m_pwaiter = pwaiter;
 }
 
 void TcpSock::ClearEvent()

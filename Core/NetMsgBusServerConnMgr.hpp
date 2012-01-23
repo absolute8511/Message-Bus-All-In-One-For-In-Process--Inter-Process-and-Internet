@@ -332,7 +332,8 @@ public:
             service_name += *cit + ",";
             ++cit;
         }
-        PostMsg("netmsgbus.server.queryservice.rsp", CustomType2Param(service_name));
+        
+        //PostMsg("netmsgbus.server.queryservice.rsp", PBType2Param(*pbrsp));
         g_log.Log(lv_debug, "all available services:%s", service_name.c_str());
         printf("all available services:%s\n", service_name.c_str());
     }

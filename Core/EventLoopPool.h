@@ -14,6 +14,7 @@ namespace core { namespace net {
 class EventLoopPool : private boost::noncopyable
 {
 public:
+    static bool  InitEventLoopPool();
     static void  DestroyEventLoopPool();
     static bool CreateEventLoop(const std::string& name, boost::shared_ptr<SockWaiterBase> spwaiter);
     static void TerminateLoop(const std::string& name);

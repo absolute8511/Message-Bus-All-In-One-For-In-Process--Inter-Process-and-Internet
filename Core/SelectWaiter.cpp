@@ -43,6 +43,7 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
             ++cit;
             continue;
         }
+        //printf("fd:%d added to readfds\n", fd);
         FD_SET(fd, &readfds);
         FD_SET(fd, &exceptfds);
         if( (*cit)->IsNeedWrite() )
@@ -53,6 +54,10 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
             maxfd = fd;
         ++cit;
     }
+    // got new tcp event as soon as Possible, we add the notify pipe to wait fd sets.
+    FD_SET(m_notify_pipe[0], &readfds);
+    if(m_notify_pipe[0] > maxfd)
+        maxfd = m_notify_pipe[0];
     if(maxfd == 0)
     {
         //printf("tick:select start:%lld\n", (int64_t)utility::GetTickCount());
@@ -60,9 +65,11 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         ::select(0, NULL, NULL, NULL, &tv);
     }
     int retcode = ::select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
-    //if(maxfd == 0)
-        //printf("tick:select end:%lld, tv.tv_usec:%ld, retcode:%d\n", (int64_t)utility::GetTickCount(),
-        //    tv.tv_usec, retcode);
+    //printf("tick:select end:%lld, maxfd:%d, retcode:%d\n", (int64_t)utility::GetTickCount(),
+    //    maxfd, retcode);
+
+    GetAndClearNotify();
+    
     TcpSockContainerT::iterator it = tmp_tcpsocks.begin();
     while(it != tmp_tcpsocks.end() && *it)
     {

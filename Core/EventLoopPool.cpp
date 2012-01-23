@@ -28,9 +28,20 @@ static core::common::locker m_pool_locker;
 
 static LoggerCategory g_log("EventLoopPool");
 
+//static void new_tcp_sighandler(int sig)
+//{
+//    g_log.Log(lv_debug, "new tcp sig handler:%d", sig);
+//}
+
 EventLoopPool::EventLoopPool()
 {
 }
+
+bool EventLoopPool::InitEventLoopPool()
+{
+    return true;
+}
+
 void EventLoopPool::DestroyEventLoopPool()
 {
     EventLoopContainerT::iterator it = m_eventloop_pool.begin();

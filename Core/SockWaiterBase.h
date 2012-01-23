@@ -9,6 +9,15 @@ namespace core { namespace net {
 
 typedef std::deque< TcpSockSmartPtr > TcpSockContainerT;
 
+enum kSockActiveNotify
+{
+    NOACTIVE  =  0x0000,
+    NEWADDED  =  0x0001,
+    REMOVED   =  0x0002,
+    NEEDWRITE =  0x0004,
+    TERMINATE =  0x0008,
+};
+
 class SockWaiterBase
 {
 public:
@@ -28,10 +37,18 @@ public:
     virtual int  Wait(TcpSockContainerT& allready, struct timeval& tv) = 0;
     bool IsTcpExist(TcpSockSmartPtr sp_tcp);
     int GetActiveTcpNum();
+    // in order the waiter got the tcp add and remove event as quick as Possible,
+    // the derived class can wait on the pipe read end to got the notify event. 
+    void NotifyNewActive(kSockActiveNotify active);
+    int  GetAndClearNotify();
+
 protected:
     void ClearClosedTcpSock();
+    void NotifyNewActiveWithoutLock(kSockActiveNotify active);
     TcpSockContainerT  m_waiting_tcpsocks;
     core::common::locker m_waiting_tcpsocks_lock;
+    int  m_notify_pipe[2];
+    bool m_newnotify;
 
 };
 } }
