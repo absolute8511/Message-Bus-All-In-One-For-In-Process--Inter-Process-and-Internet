@@ -25,6 +25,8 @@ public:
     bool  IsClosed() const;
     bool  SetNonBlock();
     void  SetCloseAfterExec();
+    void  SetCaredSockEvent(SockEvent caredev);
+    SockEvent GetCaredSockEvent() const;
     void  AddEvent(EventResult er);
     void  ClearEvent();
     bool  IsNeedWrite();
@@ -39,7 +41,7 @@ public:
     //const SockBufferT& GetOutbuf() const;
     bool GetDestHost(std::string& ip, unsigned short int& port) const;
     bool Connect(const std::string ip, unsigned short int port, struct timeval& tv_timeout); 
-    int GetLastError();
+    int GetLastError() const;
     // set -1 to disable timeout.
     void SetTimeout(int to_ms);
     void UpdateTimeout();
@@ -62,6 +64,8 @@ private:
     bool m_isclosed;
     // the event happened on the TcpSock
     SockEvent  m_sockev;
+    // the event I cared about.
+    SockEvent  m_caredev;
     int  m_alive_counter;
     int  m_errno;
 

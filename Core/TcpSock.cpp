@@ -44,7 +44,7 @@ TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
 {
     m_desthost.host_ip = ip;
     m_desthost.host_port = port;
-    g_log.Log(lv_debug, "new client tcp %s:%d.", ip.c_str(), port);
+    //g_log.Log(lv_debug, "new client tcp %s:%d.", ip.c_str(), port);
     tmpbuf.reset(new char[BLOCK_SIZE]);
 }
 
@@ -78,6 +78,16 @@ void TcpSock::SetCloseAfterExec()
     }
     int ret = fcntl(m_fd, F_SETFD, fdflag|FD_CLOEXEC);
     assert(ret >= 0);
+}
+
+void TcpSock::SetCaredSockEvent(SockEvent caredev)
+{
+    m_caredev = caredev;
+}
+
+SockEvent TcpSock::GetCaredSockEvent() const
+{
+    return m_caredev;
 }
 
 int TcpSock::GetFD() const
@@ -124,7 +134,7 @@ void TcpSock::UpdateTimeout()
     }
 }
 
-int TcpSock::GetLastError()
+int TcpSock::GetLastError() const
 {
     return m_errno;
 }
@@ -142,7 +152,7 @@ void TcpSock::ShutDownWrite()
     m_writeable = false;
     m_outbuf.insert(m_outbuf.end(), m_tmpoutbuf.begin(), m_tmpoutbuf.end());
     // before shutdown we try send the left data directly.
-    if(!m_outbuf.empty() && (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size()))
+    if(!m_outbuf.empty() /*&& (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size())*/)
     {
         g_log.Log(lv_warn, "outbuf is not empty while shutdown write, some data may not sended.");
     }
@@ -164,20 +174,25 @@ void TcpSock::DisAllowSend()
 
 void TcpSock::Close()
 {
-    //printf("the tcp is going to close. fd:%d.\n", m_fd);
-    core::common::locker_guard guard(m_tmpoutbuf_lock);
-    m_outbuf.insert(m_outbuf.end(), m_tmpoutbuf.begin(), m_tmpoutbuf.end());
-    // before shutdown we try send the left data directly.
-    if(!m_outbuf.empty() && (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size()))
     {
-        g_log.Log(lv_warn, "outbuf is not empty while close socket realfd, some data may not sended.");
+        core::common::locker_guard guard(m_tmpoutbuf_lock);
+        m_outbuf.insert(m_outbuf.end(), m_tmpoutbuf.begin(), m_tmpoutbuf.end());
+        if(!m_outbuf.empty() /*&& (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size())*/)
+        {
+            g_log.Log(lv_warn, "outbuf is not empty while close socket realfd, some data may not sended.");
+        }
+        m_tmpoutbuf.clear();
     }
     if(!m_isclosed && m_fd != -1)
     {
+        if(m_pwaiter)
+        {
+            m_pwaiter->RemoveTcpSock(shared_from_this());
+        }
+        //g_log.Log(lv_debug, "the tcp is going to close. fd:%d.\n", m_fd);
         ::close(m_fd);
         m_isclosed = true;
     }
-    m_tmpoutbuf.clear();
     m_inbuf.clear();
     m_outbuf.clear();
     m_alive_counter = -1;
@@ -205,24 +220,27 @@ bool TcpSock::SendData(const char* pdata, size_t size)
     {
         try
         {
-            core::common::locker_guard guard(m_tmpoutbuf_lock);
-            if(IsClosed() || !Writeable())
             {
-                m_errno = EPIPE;
-                return false;
+                core::common::locker_guard guard(m_tmpoutbuf_lock);
+                if(IsClosed() || !Writeable())
+                {
+                    m_errno = EPIPE;
+                    return false;
+                }
+                if( (m_tmpoutbuf.size() > MAX_BUF_SIZE) || ((m_tmpoutbuf.size() + size) > MAX_BUF_SIZE) )
+                {
+                    m_errno = 0;
+                    g_log.Log(lv_warn, "buffer overflow , please slow down send.");
+                    return false;
+                }
+                m_tmpoutbuf.insert(m_tmpoutbuf.end(), pdata, pdata + size);
             }
             // notify the waiter to wake up the select.
             if(m_pwaiter)
             {
-                m_pwaiter->NotifyNewActive(NEEDWRITE);
+                m_caredev.AddEvent(EV_WRITE);
+                m_pwaiter->UpdateTcpSock(shared_from_this(), m_caredev);
             }
-            if( (m_tmpoutbuf.size() > MAX_BUF_SIZE) || ((m_tmpoutbuf.size() + size) > MAX_BUF_SIZE) )
-            {
-                m_errno = 0;
-                g_log.Log(lv_warn, "buffer overflow , please slow down send.");
-                return false;
-            }
-            m_tmpoutbuf.insert(m_tmpoutbuf.end(), pdata, pdata + size);
             return true;
         }
         catch(...)
@@ -239,7 +257,8 @@ void TcpSock::SetSockHandler(const SockHandler& cb)
 
 void TcpSock::SetSockWaiter(SockWaiterBase* pwaiter)
 {
-    m_pwaiter = pwaiter;
+    if(m_pwaiter != pwaiter)
+        m_pwaiter = pwaiter;
 }
 
 void TcpSock::ClearEvent()
@@ -275,7 +294,7 @@ void TcpSock::HandleEvent()
                 {
                     m_sockcb.onClose(shared_from_this());
                 }
-                g_log.Log(lv_debug, "fd:%d onread = 0, to close.", m_fd);
+                //g_log.Log(lv_debug, "fd:%d onread = 0, to close.", m_fd);
                 Close();
                 // fd is not available, so here should find the next event.
                 return;
@@ -344,14 +363,22 @@ void TcpSock::HandleEvent()
                             DisAllowSend();
                         }
                     }
-                    core::common::locker_guard guard(m_tmpoutbuf_lock);
-                    if(m_tmpoutbuf.empty() && !m_allow_more_send)
+                    if(m_pwaiter)
                     {
-                        // if no data in buffer and disallow more data be added to buffer
-                        // it means we can shutdown the tcp fd since no more data will be sended.
-                        ShutDownWrite();
-                        return; 
-                        // fd is not available, so here should find the next event.
+                        m_caredev.RemoveEvent(EV_WRITE);
+                        m_pwaiter->UpdateTcpSock(shared_from_this(), m_caredev);
+                    }
+                    core::common::locker_guard guard(m_tmpoutbuf_lock);
+                    if(m_tmpoutbuf.empty())
+                    {
+                        if(!m_allow_more_send)
+                        {
+                            // if no data in buffer and disallow more data be added to buffer
+                            // it means we can shutdown the tcp fd since no more data will be sended.
+                            ShutDownWrite();
+                            return; 
+                            // fd is not available, so here should find the next event.
+                        }
                     }
                 }
             }
@@ -415,6 +442,7 @@ bool TcpSock::Connect(const std::string ip, unsigned short int port, struct time
         {
             m_errno = errno;
             g_log.Log(lv_error, "connect to other client error. fd:%d, %s:%d", m_fd, ip.c_str(), port);
+            assert(false);
             return false;
         }
     }
@@ -440,7 +468,7 @@ bool TcpSock::Connect(const std::string ip, unsigned short int port, struct time
         m_errno = errno;
         return false;
     }
-    g_log.Log(lv_debug, "client  connected, fd:%d.", m_fd);
+    //g_log.Log(lv_debug, "client  connected, fd:%d.", m_fd);
     m_writeable = true;
     m_allow_more_send = true;
     m_isclosed = false;

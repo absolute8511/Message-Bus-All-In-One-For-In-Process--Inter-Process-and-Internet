@@ -31,12 +31,16 @@ SockWaiterBase::SockWaiterBase()
 
 SockWaiterBase::~SockWaiterBase()
 {
-    ClearTcpSock();    
+    //ClearTcpSock();    
+    if(m_notify_pipe[0] != -1)
+        close(m_notify_pipe[0]);
+    if(m_notify_pipe[1] != -1)
+        close(m_notify_pipe[1]);
 }
 
 void SockWaiterBase::NotifyNewActive(kSockActiveNotify active)
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+    core::common::locker_guard guard(m_common_lock);
     NotifyNewActiveWithoutLock(active);
 }
 
@@ -45,9 +49,10 @@ void SockWaiterBase::NotifyNewActiveWithoutLock(kSockActiveNotify active)
 {
 	if (m_notify_pipe[1] != -1)
     {
-		write(m_notify_pipe[1], &active, sizeof(active));
+		int writed = write(m_notify_pipe[1], &active, sizeof(active));
         m_newnotify = true;
-        //g_log.Log(lv_debug, "notify new active :%d, time:%lld", active, (int64_t)utility::GetTickCount());
+        if(writed != sizeof(active))
+            g_log.Log(lv_error, "notify new active :%d failed !!!", active);
     }
 }
 
@@ -56,7 +61,7 @@ int SockWaiterBase::GetAndClearNotify()
     int allactive = NOACTIVE;
     bool needread = false;
     {
-        core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+        core::common::locker_guard guard(m_common_lock);
         needread = m_newnotify;
         m_newnotify = false;
     }
@@ -83,63 +88,84 @@ int SockWaiterBase::GetAndClearNotify()
     return allactive;
 }
 
-bool SockWaiterBase::Empty()
+bool SockWaiterBase::Empty() const
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
     return m_waiting_tcpsocks.empty();
 }
 
-bool SockWaiterBase::IsTcpExist(TcpSockSmartPtr sp_tcp)
+//bool SockWaiterBase::IsTcpExist(TcpSockSmartPtr sp_tcp)
+//{
+//    if(!sp_tcp)
+//        return false;
+//    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+//    TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
+//    return (it != m_waiting_tcpsocks.end());
+//}
+
+int SockWaiterBase::GetActiveTcpNum() const
+{
+    return m_waiting_tcpsocks.size();
+}
+
+bool SockWaiterBase::UpdateTcpSock(TcpSockSmartPtr sp_tcp, SockEvent ev)
 {
     if(!sp_tcp)
         return false;
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
-    return (it != m_waiting_tcpsocks.end());
-}
 
-int SockWaiterBase::GetActiveTcpNum()
-{
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    return m_waiting_tcpsocks.size();
+    sp_tcp->SetCaredSockEvent(ev);
+    // add event to the real waiter(select's fds or epoll's fds)
+    UpdateTcpSockEvent(sp_tcp, ev);
+
+    if(ev.hasAny())
+    {
+        sp_tcp->SetSockWaiter(this);
+
+        bool isnew = false;
+        {
+            core::common::locker_guard guard(m_newadded_tcpsocks_lock);
+            TcpSockContainerT::iterator it = std::find_if(m_newadded_tcpsocks.begin(),
+                m_newadded_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
+            if(it == m_newadded_tcpsocks.end())
+            {
+                m_newadded_tcpsocks.push_back(sp_tcp);
+                isnew = true;
+            }
+        }
+        if(isnew)
+        {
+            NotifyNewActive(NEWADDED);
+        }
+        else
+        {
+            NotifyNewActive(UPDATEEVENT);
+        }
+    }
+    else
+    {
+        // need remove.
+        sp_tcp->SetSockWaiter(NULL);
+        NotifyNewActive(REMOVED);
+    }
+
+    return true;
 }
 
 bool SockWaiterBase::AddTcpSock(TcpSockSmartPtr sp_tcp)
 {
-    if(!sp_tcp)
-        return false;
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
-    if(it == m_waiting_tcpsocks.end())
-    {
-        m_waiting_tcpsocks.push_back(sp_tcp);
-        sp_tcp->SetSockWaiter(this);
-        NotifyNewActiveWithoutLock(NEWADDED);
-    }
-    else
-    {
-        printf("dunplicate tcp not added.\n");
-    }
-    return true;
+    SockEvent soev;
+    soev.AddEvent(EV_READ);
+    soev.AddEvent(EV_EXCEPTION);
+    return UpdateTcpSock(sp_tcp, soev);
 }
 
 void SockWaiterBase::RemoveTcpSock(TcpSockSmartPtr sp_tcp)
 {
-    if(!sp_tcp)
-        return;
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsSameTcpSock(sp_tcp));
-    if(it != m_waiting_tcpsocks.end())
-    {
-        (*it)->SetSockWaiter(NULL);
-        m_waiting_tcpsocks.erase(it);
-        NotifyNewActiveWithoutLock(REMOVED);
-    }
+    UpdateTcpSock(sp_tcp, SockEvent());
 }
 
 TcpSockSmartPtr SockWaiterBase::GetTcpSockByDestHost(const std::string& ip, unsigned short int port)
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+    core::common::locker_guard guard(m_common_lock);
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
     while( it != m_waiting_tcpsocks.end() )
     {
@@ -163,7 +189,7 @@ TcpSockSmartPtr SockWaiterBase::GetTcpSockByDestHost(const std::string& ip, unsi
 
 void SockWaiterBase::DisAllowAllTcpSend()
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
+    core::common::locker_guard guard(m_common_lock);
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
     while( it != m_waiting_tcpsocks.end() )
     {
@@ -173,41 +199,65 @@ void SockWaiterBase::DisAllowAllTcpSend()
         ++it;
     }
 }
+
 static bool IsTcpClosed(TcpSockSmartPtr sp_tcp)
 {
     if(sp_tcp)
         return sp_tcp->IsClosed();
     return true;
 }
+
+// after the tcp was closed, the waiter thread will
+// clear all closed tcp in the waiting container. no 
+// other thread expect the waiter thread can call this function. 
 void SockWaiterBase::ClearClosedTcpSock()
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    TcpSockContainerT::iterator result = std::remove_if(m_waiting_tcpsocks.begin(), m_waiting_tcpsocks.end(), IsTcpClosed);
+    core::common::locker_guard guard(m_common_lock);
+    TcpSockContainerT::iterator result = std::remove_if(m_waiting_tcpsocks.begin(),
+        m_waiting_tcpsocks.end(), IsTcpClosed);
     TcpSockContainerT::iterator erasestart = result;
-    while(result != m_waiting_tcpsocks.end())
-    {
-        if(*result)
-            (*result)->SetSockWaiter(NULL);
-        ++result;
-    }
     m_waiting_tcpsocks.erase(erasestart, m_waiting_tcpsocks.end());
-    if(erasestart != m_waiting_tcpsocks.end())
-        NotifyNewActiveWithoutLock(REMOVED);
 }
 
-void SockWaiterBase::ClearTcpSock()
+// only called in waiter thread.
+void SockWaiterBase::MergeNewAddedTcpSock()
 {
-    core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-    TcpSockContainerT::iterator begin = m_waiting_tcpsocks.begin();
-    while(begin != m_waiting_tcpsocks.end())
+    TcpSockContainerT tmp_newadded;
     {
-        if(*begin)
-            (*begin)->SetSockWaiter(NULL);
-        ++begin;
+        core::common::locker_guard guard(m_newadded_tcpsocks_lock);
+        tmp_newadded = m_newadded_tcpsocks;
+        m_newadded_tcpsocks.clear();
     }
-    m_waiting_tcpsocks.clear();
-    NotifyNewActiveWithoutLock(REMOVED);
+    core::common::locker_guard guard(m_common_lock);
+    TcpSockContainerT::iterator addedit = tmp_newadded.begin();
+    while(addedit != tmp_newadded.end())
+    {
+        TcpSockContainerT::iterator it = std::find_if(m_waiting_tcpsocks.begin(),
+            m_waiting_tcpsocks.end(), IsSameTcpSock( *addedit ));
+        if(it == m_waiting_tcpsocks.end())
+            m_waiting_tcpsocks.push_back(*addedit);
+        ++addedit;
+    }
 }
+
+// clear all tcps when terminate.
+// only called in waiter thread.
+//void SockWaiterBase::ClearTcpSock()
+//{
+//    core::common::locker_guard guard(m_common_lock);
+//    TcpSockContainerT::iterator begin = m_waiting_tcpsocks.begin();
+//    while(begin != m_waiting_tcpsocks.end())
+//    {
+//        if(*begin)
+//        {
+//            UpdateTcpSockEvent(*begin, SockEvent());
+//            (*begin)->SetCaredSockEvent(SockEvent());
+//            (*begin)->SetSockWaiter(NULL);
+//        }
+//        ++begin;
+//    }
+//    m_waiting_tcpsocks.clear();
+//}
 
 } }
 

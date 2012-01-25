@@ -279,14 +279,13 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
             int retcode = s_ready_sendmsg_cond.waittime(s_ready_sendmsg_locker, &ts);
             if(retcode == ETIMEDOUT)
             {
-                g_log.Log(lv_debug, "sendmsg ready wakeup for timeout. msgid:%s.", msgid.c_str());
                 g_log.Log(lv_warn, "sendmsg ready wakeup for timeout. msgid:%s.", msgid.c_str());
                 s_ready_sendmsgs.erase(callertid);
                 return false;
             }
             ready = s_ready_sendmsgs[callertid].ready;
-            g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
-               (uint64_t)callertid, msgid.c_str(), ready?1:0);
+            //g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
+            //   (uint64_t)callertid, msgid.c_str(), ready?1:0);
             if(ready)
             {
                 param = s_ready_sendmsgs[callertid].rspparam;
@@ -428,7 +427,7 @@ void* MsgTaskProcessProc(void*)
             s_ready_sendmsgs[mtask.callertid].ready = true;
             s_ready_sendmsgs[mtask.callertid].rspparam = mtask.msgparam;
             s_ready_sendmsgs[mtask.callertid].rspresult = ret;
-            g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
+            //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
             s_ready_sendmsg_cond.notify_all();
         }
     }

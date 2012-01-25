@@ -22,7 +22,7 @@ public:
     void SetSockWaiter(boost::shared_ptr<SockWaiterBase> spwaiter);
     bool StartLoop(pthread_t& tid);
     boost::shared_ptr<SockWaiterBase> GetEventWaiter() { return m_event_waiter; }
-    bool IsTcpExist(TcpSockSmartPtr sp_tcp);
+    //bool IsTcpExist(TcpSockSmartPtr sp_tcp);
 private:
     static void* Loop(void*);
     void CloseAllClient();

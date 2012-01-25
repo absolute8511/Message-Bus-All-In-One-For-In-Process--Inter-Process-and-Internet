@@ -42,6 +42,9 @@ static void* sig_thread(void *arg)
         case SIGUSR1:
             g_log.Log(lv_debug, "got SIGUSR1 signal. ignored.");
             break;
+        case SIGPIPE:
+            g_log.Log(lv_debug, "got SIGPIPE signal. ignored.");
+            break;
         default:
             break;
         }
@@ -54,7 +57,7 @@ void init_signals_env()
     sigemptyset(&maskset);
     //sigdelset(&maskset, SIGKILL);
     //sigdelset(&maskset, SIGSTOP);
-    sigaddset(&maskset, SIGUSR1);
+    sigaddset(&maskset, SIGPIPE);
 
     int ret;
     ret = pthread_sigmask(SIG_BLOCK, &maskset, NULL);
@@ -468,13 +471,13 @@ void testremotemsgbus()
             }
             else
             {
-                printf("timeout(%d) err get net data in thread:%llu.errmsg:%s\n", mintimeout, (uint64_t)pthread_self(),rsp_content.c_str());
+                g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu.errmsg:%s\n", mintimeout, (uint64_t)pthread_self(),rsp_content.c_str());
                 ++mintimeout;
             }
             
             threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
                     "msg_netmsgbus_testgetdata", param, 1), 0);
-            usleep(10);
+            sleep(1);
         }
         printf("\n");
         core::XParam xp2;
@@ -501,7 +504,7 @@ void testSyncGetData(const std::string& clientname, const std::string& msgid, Ms
         printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp.c_str());
     else
     {
-        printf("timeout(%d) err get net data in thread:%llu. errmsg:%s\n", timeout_sec, (uint64_t)pthread_self(), rsp.c_str());
+        g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu. errmsg:%s\n", timeout_sec, (uint64_t)pthread_self(), rsp.c_str());
     }
 }
 
@@ -674,9 +677,9 @@ void testSimpleLogger()
     int64_t tl = (int64_t)t;
     printf("print %lld\n", (int64_t)t);
     printf("print longlongint %lld\n", tl);
-    g_log.Log(lv_debug, "test time_t printf %lld", (int64_t)t);
-    g_log.Log(lv_info, "test time_t printf %lld", (int64_t)t);
-    g_log.Log(lv_error, "test time_t printf %lld", (int64_t)t);
+    g_log.Log(lv_debug, "test lv_debug time_t printf %lld", (int64_t)t);
+    g_log.Log(lv_info, "test lv_info time_t printf %lld", (int64_t)t);
+    g_log.Log(lv_error, "test lv_error time_t printf %lld", (int64_t)t);
 }
 
 int main()
@@ -689,7 +692,7 @@ int main()
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);
     printf("main in thread: %lld.\n",(uint64_t)pthread_self());
-    //testSimpleLogger();
+    testSimpleLogger();
     //sleep(30000);
     //testthreadpool();
     //testXParam();
@@ -699,8 +702,8 @@ int main()
     //testlocalmsgbus();
     testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
-    DestroyMsgBus();
     EventLoopPool::DestroyEventLoopPool();
+    DestroyMsgBus();
     threadpool::destroy_thread_pool();
     printf("leave thread pool and msgbus.\n");
 }

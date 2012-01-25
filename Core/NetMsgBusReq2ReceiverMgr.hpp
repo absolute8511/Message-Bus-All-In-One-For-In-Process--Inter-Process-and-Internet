@@ -296,7 +296,7 @@ private:
     {
         perror("sendmsg_error ");
         // you can notify the high level to handle the error, retry or just ignore.
-        //printf("client %d , error happened.\n", sp_tcp->GetFD());
+        printf("client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
     }
     bool IdentiySelfToReceiver(TcpSockSmartPtr sp_tcp)
     {

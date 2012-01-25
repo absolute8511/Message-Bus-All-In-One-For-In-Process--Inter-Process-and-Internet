@@ -139,7 +139,7 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
     if(addedev)
     {
         addedev->AddTcpSockToLoop(sp_tcp);
-        g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
+        //g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
         return true;
     }
     return false;

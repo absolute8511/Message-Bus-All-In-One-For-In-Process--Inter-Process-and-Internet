@@ -11,11 +11,11 @@ typedef std::deque< TcpSockSmartPtr > TcpSockContainerT;
 
 enum kSockActiveNotify
 {
-    NOACTIVE  =  0x0000,
-    NEWADDED  =  0x0001,
-    REMOVED   =  0x0002,
-    NEEDWRITE =  0x0004,
-    TERMINATE =  0x0008,
+    NOACTIVE    =  0x0000,
+    NEWADDED    =  0x0001,
+    REMOVED     =  0x0002,
+    UPDATEEVENT =  0x0004,
+    TERMINATE   =  0x0008,
 };
 
 class SockWaiterBase
@@ -23,30 +23,38 @@ class SockWaiterBase
 public:
     SockWaiterBase();
     virtual ~SockWaiterBase();
-    // add or update the tcp and the event you cared.
-    bool AddTcpSock(TcpSockSmartPtr sp_tcp);
     TcpSockSmartPtr GetTcpSockByDestHost(const std::string& ip, unsigned short int port);
-    // remove the event you cared on that fd, if no event set, the fd will be removed.
-    void RemoveTcpSock(TcpSockSmartPtr sp_tcp);
-    // remove all cared fds.
-    void ClearTcpSock();
     // 主动关闭时只关闭写端,等待对方close的FIN包返回后本端再close
     void DisAllowAllTcpSend();
-    bool Empty();
+
+    virtual void DestroyWaiter() = 0;
+    // add or update the tcp and the event you cared.
+    bool AddTcpSock(TcpSockSmartPtr sp_tcp);
+    void RemoveTcpSock(TcpSockSmartPtr sp_tcp);
+    // update the event you cared on that fd, if no event set, the fd will be removed.
+    bool UpdateTcpSock(TcpSockSmartPtr sp_tcp, SockEvent ev);
+
+    bool Empty() const;
     // wait for ready event you has set cared about, every time you call wait will clear old ready event. 
     virtual int  Wait(TcpSockContainerT& allready, struct timeval& tv) = 0;
-    bool IsTcpExist(TcpSockSmartPtr sp_tcp);
-    int GetActiveTcpNum();
+    //bool IsTcpExist(TcpSockSmartPtr sp_tcp);
+    int GetActiveTcpNum() const;
+
+protected:
+    // add or update the tcp and the event you cared.
+    virtual bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp, SockEvent ev) = 0;
+    void ClearClosedTcpSock();
     // in order the waiter got the tcp add and remove event as quick as Possible,
     // the derived class can wait on the pipe read end to got the notify event. 
     void NotifyNewActive(kSockActiveNotify active);
     int  GetAndClearNotify();
-
-protected:
-    void ClearClosedTcpSock();
     void NotifyNewActiveWithoutLock(kSockActiveNotify active);
+    void MergeNewAddedTcpSock();
+
     TcpSockContainerT  m_waiting_tcpsocks;
-    core::common::locker m_waiting_tcpsocks_lock;
+    TcpSockContainerT  m_newadded_tcpsocks;
+    core::common::locker m_newadded_tcpsocks_lock;
+    core::common::locker m_common_lock;
     int  m_notify_pipe[2];
     bool m_newnotify;
 

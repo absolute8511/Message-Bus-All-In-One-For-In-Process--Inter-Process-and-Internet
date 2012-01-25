@@ -112,10 +112,11 @@ void LoggerCategory::Log(LogLevel lv, const char* fmt, ...)
     }
     if(lv > SimpleLogger::Instance().GetLogLevel())
         return;
-    if(lv == lv_debug)
+    if(lv == lv_debug || lv == lv_error)
     {
 #ifdef NDEBUG 
-        return;
+        if(lv == lv_debug)
+            return;
 #endif
         va_list vl_args;
         va_start(vl_args, fmt);

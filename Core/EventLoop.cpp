@@ -32,12 +32,12 @@ void EventLoop::CloseAllClient()
         m_event_waiter->DisAllowAllTcpSend();
 }
 
-bool EventLoop::IsTcpExist(TcpSockSmartPtr sp_tcp)
-{
-    if(m_event_waiter)
-        return m_event_waiter->IsTcpExist(sp_tcp);
-    return false;
-}
+//bool EventLoop::IsTcpExist(TcpSockSmartPtr sp_tcp)
+//{
+//    if(m_event_waiter)
+//        return m_event_waiter->IsTcpExist(sp_tcp);
+//    return false;
+//}
 
 bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
 {
@@ -49,8 +49,7 @@ bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
 void EventLoop::TerminateLoop()
 {
     m_terminal = true;
-    if(m_event_waiter)
-        m_event_waiter->NotifyNewActive(TERMINATE);
+    CloseAllClient();
 }
 
 int EventLoop::GetActiveTcpNum()
@@ -152,7 +151,7 @@ void* EventLoop::Loop(void* param)
         }// end of while of readytcps process.
 
     }// end of while(true)
-    //el->CloseAllClient();
+    el->m_event_waiter->DestroyWaiter();
     g_log.Log(lv_debug, "event loop exit loop.");
     el->m_islooprunning = false;
     return 0;

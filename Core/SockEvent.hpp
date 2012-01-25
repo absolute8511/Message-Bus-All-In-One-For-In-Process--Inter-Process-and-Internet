@@ -18,6 +18,10 @@ public:
         :event(EV_NOEVENT)
     {
     }
+    bool hasAny() const
+    {
+        return event != EV_NOEVENT;
+    }
     bool hasRead() const
     {
         return (event & EV_READ) != EV_NOEVENT;
