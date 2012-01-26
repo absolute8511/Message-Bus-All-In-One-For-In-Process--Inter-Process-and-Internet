@@ -44,7 +44,7 @@ TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
 {
     m_desthost.host_ip = ip;
     m_desthost.host_port = port;
-    //g_log.Log(lv_debug, "new client tcp %s:%d.", ip.c_str(), port);
+    //g_log.Log(lv_debug, "new client tcp %s:%d.fd:%d", ip.c_str(), port, m_fd);
     tmpbuf.reset(new char[BLOCK_SIZE]);
 }
 
@@ -183,22 +183,25 @@ void TcpSock::Close()
         }
         m_tmpoutbuf.clear();
     }
+    m_writeable = false;
+    m_allow_more_send = false;
     if(!m_isclosed && m_fd != -1)
     {
         if(m_pwaiter)
         {
             m_pwaiter->RemoveTcpSock(shared_from_this());
+            m_pwaiter = NULL;
         }
         //g_log.Log(lv_debug, "the tcp is going to close. fd:%d.\n", m_fd);
-        ::close(m_fd);
+        // mark as closed first, because any new tcp created by other thread
+        // will immediately reuse the fd before the m_fd be setted to -1.
         m_isclosed = true;
+        ::close(m_fd);
+        m_fd = -1;
     }
     m_inbuf.clear();
     m_outbuf.clear();
     m_alive_counter = -1;
-    m_writeable = false;
-    m_allow_more_send = false;
-    m_fd = -1;
     m_desthost.host_ip = "";
     m_is_timeout_need = false;
 }
@@ -239,7 +242,7 @@ bool TcpSock::SendData(const char* pdata, size_t size)
             if(m_pwaiter)
             {
                 m_caredev.AddEvent(EV_WRITE);
-                m_pwaiter->UpdateTcpSock(shared_from_this(), m_caredev);
+                m_pwaiter->UpdateTcpSock(shared_from_this());
             }
             return true;
         }
@@ -366,7 +369,7 @@ void TcpSock::HandleEvent()
                     if(m_pwaiter)
                     {
                         m_caredev.RemoveEvent(EV_WRITE);
-                        m_pwaiter->UpdateTcpSock(shared_from_this(), m_caredev);
+                        m_pwaiter->UpdateTcpSock(shared_from_this());
                     }
                     core::common::locker_guard guard(m_tmpoutbuf_lock);
                     if(m_tmpoutbuf.empty())
@@ -418,7 +421,8 @@ void TcpSock::HandleEvent()
 
 bool TcpSock::Connect(const std::string ip, unsigned short int port, struct timeval& tv_timeout)
 {
-    Close();
+    //Close();
+    assert(m_fd == -1);
     struct sockaddr_in dest_address;
     dest_address.sin_family = AF_INET;
     inet_pton(AF_INET, ip.c_str(), &dest_address.sin_addr);

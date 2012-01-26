@@ -32,7 +32,7 @@ public:
     bool AddTcpSock(TcpSockSmartPtr sp_tcp);
     void RemoveTcpSock(TcpSockSmartPtr sp_tcp);
     // update the event you cared on that fd, if no event set, the fd will be removed.
-    bool UpdateTcpSock(TcpSockSmartPtr sp_tcp, SockEvent ev);
+    bool UpdateTcpSock(TcpSockSmartPtr sp_tcp);
 
     bool Empty() const;
     // wait for ready event you has set cared about, every time you call wait will clear old ready event. 
@@ -42,7 +42,8 @@ public:
 
 protected:
     // add or update the tcp and the event you cared.
-    virtual bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp, SockEvent ev) = 0;
+    virtual bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp) = 0;
+    void UpdateTcpSockEvent();
     void ClearClosedTcpSock();
     // in order the waiter got the tcp add and remove event as quick as Possible,
     // the derived class can wait on the pipe read end to got the notify event. 
@@ -53,7 +54,9 @@ protected:
 
     TcpSockContainerT  m_waiting_tcpsocks;
     TcpSockContainerT  m_newadded_tcpsocks;
-    core::common::locker m_newadded_tcpsocks_lock;
+    TcpSockContainerT  m_updateev_tcpsocks;
+    //core::common::locker m_newadded_tcpsocks_lock;
+    //core::common::locker m_updateev_tcpsocks_lock;
     core::common::locker m_common_lock;
     int  m_notify_pipe[2];
     bool m_newnotify;

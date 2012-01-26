@@ -14,7 +14,7 @@ public:
     int  Wait(TcpSockContainerT& allready, struct timeval& tv);
     void DestroyWaiter();
 protected:
-    bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp, SockEvent so_ev);
+    bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp);
 private:
     fd_set m_readfds;
     fd_set m_exceptfds;

@@ -46,6 +46,10 @@ public:
     {
         event = EV_NOEVENT;
     }
+    EventResult GetEvent() const
+    {
+        return event;
+    }
 private:
     EventResult event;
 };

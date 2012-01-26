@@ -313,7 +313,7 @@ bool PostMsg(const std::string& msgid, MsgBusParam param)
     // post message will be processed in the thread of msgbus.
     s_all_msgtask.push_back(MsgTask(msgid, param.DeepCopy(), msgbus_tid));
 #ifndef NDEBUG
-    if(s_all_msgtask.size() > 5)
+    if(s_all_msgtask.size() > 15)
         g_log.Log(lv_debug, "current msg size:%zu.", s_all_msgtask.size());
 #endif
     s_msgtask_condition.notify_one();

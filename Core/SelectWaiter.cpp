@@ -28,7 +28,8 @@ void SelectWaiter::DestroyWaiter()
 }
 
 // note: can not be locked by caller.
-bool SelectWaiter::UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp, SockEvent so_ev)
+// only can be called in waiter thread.
+bool SelectWaiter::UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp)
 {
     assert(sp_tcp);
     int fd = sp_tcp->GetFD();
@@ -37,7 +38,8 @@ bool SelectWaiter::UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp, SockEvent so_ev)
     {
         return false;
     }
-    core::common::locker_guard guard(m_common_lock);
+    //core::common::locker_guard guard(m_common_lock);
+    SockEvent so_ev = sp_tcp->GetCaredSockEvent();
     FD_CLR(fd, &m_readfds);
     FD_CLR(fd, &m_exceptfds);
     FD_CLR(fd, &m_writefds);
@@ -69,12 +71,23 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     FD_ZERO(&writefds);
     FD_ZERO(&exceptfds);
 
+    int notifytype = GetAndClearNotify();
+    if(notifytype & REMOVED)
     {
-        core::common::locker_guard guard(m_common_lock);
-        readfds = m_readfds;
-        writefds = m_writefds;
-        exceptfds = m_exceptfds;
+        ClearClosedTcpSock();
     }
+    if(notifytype & NEWADDED)
+    {
+        MergeNewAddedTcpSock();
+    }
+    if(notifytype & UPDATEEVENT)
+    {
+        SockWaiterBase::UpdateTcpSockEvent();
+    }
+    
+    readfds = m_readfds;
+    writefds = m_writefds;
+    exceptfds = m_exceptfds;
     if(maxfd == 0)
     {
         // if tmp_tcpsocks is Empty, timeout need longer .
@@ -84,16 +97,6 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     //printf("tick:select end:%lld, maxfd:%d, retcode:%d\n", (int64_t)utility::GetTickCount(),
     //    maxfd, retcode);
 
-    int notifytype = GetAndClearNotify();
-    if(notifytype & NEWADDED)
-    {
-        MergeNewAddedTcpSock();
-    }
-    if(notifytype & REMOVED)
-    {
-        ClearClosedTcpSock();
-    }
-    
     // the new added tcp container and waiting tcp container have been seperated,
     // so no lock need here. no other thread can modify the waiting tcp container.
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
@@ -101,6 +104,7 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     {
         assert(*it);
         int fd = (*it)->GetFD();
+        assert(fd != -1);
         (*it)->ClearEvent();
         bool isready = false;
         if(FD_ISSET(fd, &readfds))
