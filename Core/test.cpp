@@ -108,7 +108,7 @@ public:
         GenerateNextTestParam(param);
         NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-        sleep(1);
+        //sleep(1);
         return true;
     }
     bool testMsgBus2(const std::string& msgid, MsgBusParam& param, bool& is_continue)
@@ -117,7 +117,7 @@ public:
         GenerateNextTestParam(param);
         NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
-        sleep(1);
+        //sleep(1);
         return true;
     }
     bool testMsgBus3(const std::string& msgid, MsgBusParam& param, bool& is_continue)
@@ -145,7 +145,7 @@ public:
     {
         m_test_cached_param.push_back(param);
         printf("caching param\n");
-        sleep(1);
+        //sleep(1);
         return true;
     }
     void printMsg(const std::string& msgid, MsgBusParam param, const std::string& func_name)
@@ -198,19 +198,19 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
 
-        sleep(2);
+        //sleep(2);
         return true;
     }
     bool testMsgBus22(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
         printMsg(msgid, param, __FUNCTION__);
-        sleep(1);
+        //sleep(1);
         return true;
     }
     bool testMsgBus23(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
         printMsg(msgid, param, __FUNCTION__);
-        sleep(1);
+        //sleep(1);
         return true;
     }
     void printMsg(const std::string& msgid, MsgBusParam param, const std::string& func_name)
@@ -418,6 +418,7 @@ void testremotemsgbus()
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
         int mintimeout = 1;
+        int64_t starttime = utility::GetTickCount();
         while(true)
         {
             if(s_break)
@@ -444,6 +445,8 @@ void testremotemsgbus()
             //if(sendcounter % 100 == 0)
             //{
             printf("{%d}\n ", sendcounter);
+            if(sendcounter >= 3000)
+                break;
             //}
             //GenerateNextTestParam(param);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
@@ -477,7 +480,6 @@ void testremotemsgbus()
             
             threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
                     "msg_netmsgbus_testgetdata", param, 1), 0);
-            sleep(1);
         }
         printf("\n");
         core::XParam xp2;
@@ -485,6 +487,8 @@ void testremotemsgbus()
         int value = 0;
         xp2.get_Int("testkey", value);
         printf("total %d msgs sended. last param:%d.\n", sendcounter, value);
+        int64_t endtime = utility::GetTickCount();
+        g_log.Log(lv_debug, "%d msgs used time:%lld\n", sendcounter, endtime - starttime);
     }
 
     while(true)
