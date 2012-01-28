@@ -429,7 +429,8 @@ bool server_onSend(TcpSockSmartPtr sp_tcp)
 void server_onTimeout(TcpSockSmartPtr sp_tcp)
 {
     server_onClose(sp_tcp);
-    sp_tcp->Close();
+    sp_tcp->DisAllowSend();
+    // may be want to close the sock fd, if client does not return read=0 ?
 }
 
 void server_onError(TcpSockSmartPtr sp_tcp)

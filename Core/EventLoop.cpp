@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <boost/bind.hpp>
 
 #define TIMEOUT_SHORT 2
 
@@ -19,37 +20,80 @@ EventLoop::EventLoop()
     m_terminal = false;
     m_islooprunning = false;
 }
+
 EventLoop::~EventLoop()
 {
     m_terminal = true;
-    CloseAllClient();
+    //CloseAllClient();
     m_islooprunning = false;
 }
+
 // 主动关闭时只关闭写端,等待对方close的FIN包返回后本端再close
 void EventLoop::CloseAllClient()
 {
+    assert(IsInLoopThread());
     if(m_event_waiter)
         m_event_waiter->DisAllowAllTcpSend();
 }
 
-//bool EventLoop::IsTcpExist(TcpSockSmartPtr sp_tcp)
-//{
-//    if(m_event_waiter)
-//        return m_event_waiter->IsTcpExist(sp_tcp);
-//    return false;
-//}
+bool EventLoop::IsInLoopThread()
+{
+    return pthread_equal(m_cur_looptid, pthread_self()) != 0;
+}
 
 bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
 {
     if(m_terminal || m_event_waiter==NULL)
         return false;
-    return m_event_waiter->AddTcpSock(sp_tcp);
+    sp_tcp->SetEventLoop(this);
+    if(!IsInLoopThread())
+    {
+        QueueTaskToLoop(boost::bind(&EventLoop::AddTcpSockToLoopInLoopThread,
+                shared_from_this(), sp_tcp));
+        return true;
+    }
+    AddTcpSockToLoopInLoopThread(sp_tcp);
+    return true;
+}
+
+void EventLoop::AddTcpSockToLoopInLoopThread(TcpSockSmartPtr sp_tcp)
+{
+    assert(IsInLoopThread());
+    m_event_waiter->AddTcpSock(sp_tcp);
+}
+
+bool EventLoop::UpdateTcpSock(TcpSockSmartPtr sp_tcp)
+{
+    assert(IsInLoopThread());
+    if(m_event_waiter==NULL)
+        return false;
+    return m_event_waiter->UpdateTcpSock(sp_tcp);
+}
+
+void EventLoop::RemoveTcpSock(TcpSockSmartPtr sp_tcp)
+{
+    assert(IsInLoopThread());
+    if(m_event_waiter==NULL)
+        return;
+    m_event_waiter->RemoveTcpSock(sp_tcp);
+}
+
+bool EventLoop::QueueTaskToLoop(EvTask task)
+{
+    {
+        common::locker_guard guard(m_lock);
+        m_pendings.push_back(task);
+    }
+    if(m_event_waiter)
+        m_event_waiter->NotifyNewActive(UPDATEEVENT);
+    return true;
 }
 
 void EventLoop::TerminateLoop()
 {
     m_terminal = true;
-    CloseAllClient();
+    if(m_event_waiter)
+        m_event_waiter->NotifyNewActive(TERMINATE);
 }
 
 int EventLoop::GetActiveTcpNum()
@@ -64,7 +108,10 @@ int EventLoop::GetActiveTcpNum()
 void EventLoop::SetSockWaiter(boost::shared_ptr<SockWaiterBase> spwaiter)
 {
     if(spwaiter)
+    {
+        spwaiter->SetEventLoop(this);
         m_event_waiter = spwaiter;
+    }
 }
 
 bool EventLoop::StartLoop(pthread_t& tid)
@@ -72,10 +119,8 @@ bool EventLoop::StartLoop(pthread_t& tid)
     if( m_islooprunning )
         return true;
     m_terminal = false;
-    if(m_event_waiter == NULL)
-    {
-        return false;
-    }
+
+    assert(m_event_waiter);
 
     shared_ptr<EventLoop>* selfRef = new shared_ptr<EventLoop>();
     *selfRef = shared_from_this();
@@ -84,6 +129,7 @@ bool EventLoop::StartLoop(pthread_t& tid)
     {
         //printf("event loop :%lld started.\n", (uint64_t)tid);
         g_log.Log(lv_debug, "event loop : %lld started.", (uint64_t)tid);
+        m_cur_looptid = tid;
         return true;
     }
     m_terminal = true;
@@ -106,8 +152,8 @@ void* EventLoop::Loop(void* param)
     while(true)
     {
         struct timeval tv;
-        tv.tv_sec = 1; //TIMEOUT_SHORT;
-        tv.tv_usec = 100000;
+        tv.tv_sec = 10; //TIMEOUT_SHORT;
+        tv.tv_usec = 200000;
 
         if(el->m_terminal)
         {// 关闭本地还活动的连接的写端,然后等待对方的响应后再彻底关闭连接,当所有的活动连接数都关闭后,再退出该事件循环体
@@ -117,6 +163,7 @@ void* EventLoop::Loop(void* param)
         }
         // 这里的超时应该尽量短，因为第一个过来的新客户端的响应需要等到下次超时才能处理
         int retcode = el->m_event_waiter->Wait(readytcps, tv);
+
         if(retcode == -1)
         {
             g_log.Log(lv_error, "event loop select error.");
@@ -124,6 +171,21 @@ void* EventLoop::Loop(void* param)
                 break;
             continue;
         }
+
+        std::vector<EventLoop::EvTask> tmptasks;
+        {
+            common::locker_guard guard(el->m_lock);
+            tmptasks = el->m_pendings;
+            el->m_pendings.clear();
+        }
+
+        for(size_t i = 0; i < tmptasks.size(); i++)
+        {
+            tmptasks[i]();
+        }
+        tmptasks.clear();
+
+
         if(el->m_terminal)
         {
             if(el->m_event_waiter->Empty())
@@ -152,7 +214,7 @@ void* EventLoop::Loop(void* param)
 
     }// end of while(true)
     el->m_event_waiter->DestroyWaiter();
-    g_log.Log(lv_debug, "event loop exit loop.");
+    g_log.Log(lv_debug, "event loop:%ld exit loop.", (long)el->m_cur_looptid);
     el->m_islooprunning = false;
     return 0;
 }

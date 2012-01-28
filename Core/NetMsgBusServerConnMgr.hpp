@@ -139,12 +139,15 @@ public:
     }
     void onServerTcpClose(TcpSockSmartPtr sp_tcp)
     {
-        m_server_connecting = true;
+        m_server_connecting = false;
+        m_server_tcp.reset();
+        g_log.Log(lv_debug, "disconnect from msgbus server for closed.");
     }
     void onServerTcpError(TcpSockSmartPtr)
     {
         g_log.Log(lv_error, "disconnect from msgbus server for error.");
-        m_server_connecting = true;
+        m_server_connecting = false;
+        m_server_tcp.reset();
     }
     void onServerTimeout(TcpSockSmartPtr sp_tcp)
     {
@@ -200,6 +203,8 @@ public:
         if(m_server_tcp)
             m_server_tcp->DisAllowSend();
         m_server_connecting = false;
+        m_server_tcp.reset();
+        g_log.Log(lv_debug, "stopping server connection.");
     }
     bool ProcessRspBody(kMsgBusBodyType body_type, const std::string& rsp_body)
     {

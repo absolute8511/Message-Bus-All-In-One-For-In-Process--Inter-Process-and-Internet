@@ -11,7 +11,7 @@
 #include <boost/enable_shared_from_this.hpp>
 
 namespace core { namespace net {
-class SockWaiterBase;
+class EventLoop;
 class TcpSock : private boost::noncopyable, public boost::enable_shared_from_this<TcpSock>
 {
 public:
@@ -46,11 +46,13 @@ public:
     void SetTimeout(int to_ms);
     void UpdateTimeout();
     void RenewTimeout();
-    // 服务端需要有主动关闭,因此改成public
-    void  Close();
-    void  SetSockWaiter(SockWaiterBase* pwaiter);
+    void  SetEventLoop(EventLoop* pev);
 private:
+    void SendDataInLoop(const std::string& data);
+    void SendDataInLoop(const char* pdata, size_t size);
     void  ShutDownWrite();
+    // 服务端需要有主动关闭时,调用DisAllowSend即可
+    void  Close(bool needremove = true);
     // 每个fd都有2个缓冲区,一个输入,一个输出, 必须使用连续内存, 因此deque不能使用(deque分块连续)
     SockBufferT m_inbuf;
     SockBufferT m_outbuf;
@@ -61,7 +63,7 @@ private:
     bool m_writeable;
     // this flag indicate whether more data is allowed to be send to the outbufffer.
     volatile bool m_allow_more_send;
-    bool m_isclosed;
+    bool m_isclosing;
     // the event happened on the TcpSock
     SockEvent  m_sockev;
     // the event I cared about.
@@ -70,8 +72,8 @@ private:
     int  m_errno;
 
     boost::shared_array<char> tmpbuf;
-    core::common::locker m_tmpoutbuf_lock;
-    SockBufferT  m_tmpoutbuf;
+    //core::common::locker m_lock;
+    //SockBufferT  m_tmpoutbuf;
     struct DestHost
     {
         std::string host_ip;
@@ -81,7 +83,7 @@ private:
     int  m_timeout_ms;
     int  m_timeout_renew;
     bool m_is_timeout_need;
-    SockWaiterBase* m_pwaiter;
+    EventLoop* m_evloop;
 };
 
 typedef boost::shared_ptr< TcpSock > TcpSockSmartPtr;

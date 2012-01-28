@@ -305,7 +305,7 @@ private:
         //printf("client %d , timeout. in receiver.\n", sp_tcp->GetFD());
         m_sendmsg_clientnum--;
         m_client_senders.erase(sp_tcp->GetFD());
-        sp_tcp->Close();
+        sp_tcp->DisAllowSend();
         return;
     }
 

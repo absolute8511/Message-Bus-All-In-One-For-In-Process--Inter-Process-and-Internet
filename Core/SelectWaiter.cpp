@@ -3,6 +3,8 @@
 #include "SimpleLogger.h"
 #include "CommonUtility.hpp"
 
+#include <errno.h>
+
 namespace core { namespace net { 
 
 SelectWaiter::SelectWaiter()
@@ -23,6 +25,7 @@ SelectWaiter::~SelectWaiter()
 
 void SelectWaiter::DestroyWaiter()
 {
+    SockWaiterBase::DestroyWaiter();
     if(m_notify_pipe[0] != -1)
         FD_CLR(m_notify_pipe[0], &m_readfds);
 }
@@ -38,18 +41,17 @@ bool SelectWaiter::UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp)
     {
         return false;
     }
-    //core::common::locker_guard guard(m_common_lock);
     SockEvent so_ev = sp_tcp->GetCaredSockEvent();
     FD_CLR(fd, &m_readfds);
     FD_CLR(fd, &m_exceptfds);
     FD_CLR(fd, &m_writefds);
+
     if(so_ev.hasRead())
     {
         FD_SET(fd, &m_readfds);
     }
-    if(/*so_ev.hasWrite() && */sp_tcp->IsNeedWrite())
+    if(so_ev.hasWrite())
     {
-        //assert(sp_tcp->IsNeedWrite() == so_ev.hasWrite());
         FD_SET(fd, &m_writefds);
     }
     if(so_ev.hasException())
@@ -71,19 +73,6 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     FD_ZERO(&writefds);
     FD_ZERO(&exceptfds);
 
-    int notifytype = GetAndClearNotify();
-    if(notifytype & REMOVED)
-    {
-        ClearClosedTcpSock();
-    }
-    if(notifytype & NEWADDED)
-    {
-        MergeNewAddedTcpSock();
-    }
-    if(notifytype & UPDATEEVENT)
-    {
-        SockWaiterBase::UpdateTcpSockEvent();
-    }
     
     readfds = m_readfds;
     writefds = m_writefds;
@@ -94,8 +83,33 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         ::select(0, NULL, NULL, NULL, &tv);
     }
     int retcode = ::select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
-    //printf("tick:select end:%lld, maxfd:%d, retcode:%d\n", (int64_t)utility::GetTickCount(),
-    //    maxfd, retcode);
+
+    // clear immediately after select waking up to speed up eventloop.
+    int notifytype = GetAndClearNotify();
+    if(notifytype & REMOVED)
+    {
+        ClearClosedTcpSock();
+    }
+
+    if(retcode == -1 && errno == EBADF)
+    {
+        // some closed fd did not clean properly.
+        //
+        assert(false);
+        FD_ZERO(&m_readfds);
+        FD_ZERO(&m_writefds);
+        FD_ZERO(&m_exceptfds);
+        TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
+        while(it != m_waiting_tcpsocks.end() && *it)
+        {
+            UpdateTcpSockEvent(*it);
+            ++it;
+        }
+        FD_SET(m_notify_pipe[0], &m_readfds);
+        if(m_notify_pipe[0] > maxfd)
+            maxfd = m_notify_pipe[0];
+        return retcode;
+    }
 
     // the new added tcp container and waiting tcp container have been seperated,
     // so no lock need here. no other thread can modify the waiting tcp container.
