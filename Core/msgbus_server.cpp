@@ -266,7 +266,7 @@ void* msgbus_server_accept_thread( void* param )
     g_log.Log(lv_warn, "server waiting on port: %d ...", s_server_port);
     s_netmsgbus_server_running = true;
     // 长时间没有客户端连接的话,自动退出服务端
-    // int noclient_quit_cnt = 0;
+    int noclient_quit_cnt = 0;
     while(1){
         fd_set testreadfds = readfds;
 
@@ -278,22 +278,18 @@ void* msgbus_server_accept_thread( void* param )
             g_log.Log(lv_error, "server select error.");
             continue;
         }
-        //if(active_clients.empty())
-        //{
-        //    ++noclient_quit_cnt;
-#ifdef NDEBUG
-        //    if(noclient_quit_cnt > 2)
-#else
-        //    if(noclient_quit_cnt > 15)
-#endif
-        //    {
-        //        s_netmsgbus_server_terminate = true;
-        //    }
-        //}
-        //else
-        //{
-        //    noclient_quit_cnt = 0;
-        //}
+        if(active_clients.empty())
+        {
+            ++noclient_quit_cnt;
+            if(noclient_quit_cnt > 15)
+            {
+                s_netmsgbus_server_terminate = true;
+            }
+        }
+        else
+        {
+            noclient_quit_cnt = 0;
+        }
         if(s_netmsgbus_server_terminate)
         {
             break;
@@ -333,10 +329,6 @@ void* msgbus_server_accept_thread( void* param )
 
 size_t server_onRead(TcpSockSmartPtr sp_tcp, const char* pdata, size_t size)
 {
-    //if(size > 0)
-    //{
-    //    sp_tcp->SetTimeout(KEEP_ALIVE_TIME);
-    //}
     size_t readedlen = 0;
     while(true)
     {
@@ -422,15 +414,13 @@ void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head
 
 bool server_onSend(TcpSockSmartPtr sp_tcp)
 {
-    //sp_tcp->SetTimeout(KEEP_ALIVE_TIME);
     return true;
 }
 
 void server_onTimeout(TcpSockSmartPtr sp_tcp)
 {
     server_onClose(sp_tcp);
-    sp_tcp->DisAllowSend();
-    // may be want to close the sock fd, if client does not return read=0 ?
+    sp_tcp->Close();
 }
 
 void server_onError(TcpSockSmartPtr sp_tcp)
@@ -548,10 +538,6 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
         }
     }
     assert(rsp.err_msg_len);
-    //boost::shared_array<char> errmsgbuf(new char[rsp.err_msg_len]);
-    //rsp.err_msg = errmsgbuf.get();
-    //strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
-    //
     // until I know, all implementation of std::string's storage is contiguous. 
     errmsg.push_back('\0');
     rsp.err_msg_len = errmsg.size();
@@ -616,12 +602,10 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
 {
     MsgBusSendMsgReq req;
     //assert(body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
-    //boost::shared_array<char> msg_content_buf(new char[body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
-    //req.msg_content = msg_content_buf.get();
     req.UnPackBody(bodybuffer.get(), body_len);
     string dest_name(req.dest_name);
-    g_log.Log(lv_debug, "server relay sendmsg from client:%s, content:%s. dest:%s", 
-        string(req.from_name).c_str(), req.GetMsgContent(), dest_name.c_str());
+    //g_log.Log(lv_debug, "server relay sendmsg from client:%s, content:%s. dest:%s", 
+    //    string(req.from_name).c_str(), req.GetMsgContent(), dest_name.c_str());
     // support the prefix matching of client_name , so we can send messages to group of clients.
     bool is_exist = false;
     {
@@ -677,10 +661,6 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
         rsp.err_msg_len = errmsg.size() + 1;
     }
 
-    //boost::shared_array<char> err_buf(new char[rsp.err_msg_len]);
-    //rsp.err_msg = err_buf.get();
-    //strncpy(rsp.err_msg, errmsg.c_str(), rsp.err_msg_len);
-
     // until I know, all implementation of std::string's storage is contiguous. 
     errmsg.push_back('\0');
     rsp.err_msg_len = errmsg.size();
@@ -724,11 +704,7 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
 void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusPackPBType pbbody;
-    //boost::shared_array<char> tempbuf(new char[body_len]);
-    //boost::shared_array<char> tempbuf2(new char[body_len]);
 
-    //pbbody.pbdata = tempbuf.get();
-    //pbbody.pbtype = tempbuf2.get();
     pbbody.UnPackBody(bodybuffer.get(), body_len);
     string pbtype(pbbody.GetPBType());
     string pbdata(pbbody.GetPBData(), pbbody.pbdata_len);
@@ -821,7 +797,7 @@ void* msgbus_process_thread( void* param )
                 {
                     if(is_prefix_matching(cit->first, reqtask.client_name))
                     {
-                        g_log.Log(lv_debug, "matching name %s vs %s", cit->first.c_str(), reqtask.client_name.c_str());
+                        //g_log.Log(lv_debug, "matching name %s vs %s", cit->first.c_str(), reqtask.client_name.c_str());
                         TcpSockSmartPtr destclient;
                         if(msgbus_select_best_client(cit->second, destclient))
                         {
@@ -889,8 +865,8 @@ int main(int argc, char* argv[])
         s_server_port = MSGBUS_SERVER_DEFAULT_PORT;
     }
     threadpool::init_thread_pool();
-    // message bus will offer two tcp connection, one for the register of a service, 
-    // another for request an exist service.
+    // message bus server will offer two tcp connection, one for the register of a service, 
+    // another for communicating with other msgbus server.
     pthread_t register_thread;
     pthread_t process_thread;
     SimpleLogger::Instance().Init(utility::GetModulePath() + "/msgbus_server_log.log", lv_debug);

@@ -435,7 +435,7 @@ public:
         sendmsg_req.from_name[m_receiver_name.size()] = '\0';
 
         sendmsg_req.msg_id = (uint32_t)core::utility::GetTickCount();
-        //printf("server tick msgid %u, (tick %ld). sendmsg use server relay from:%s\n",
+        //g_log.Log(lv_debug, "server tick msgid %u, (tick %ld). sendmsg use server relay from:%s",
         //    sendmsg_req.msg_id, core::utility::GetTickCount(), m_receiver_name.c_str());
         sendmsg_req.msg_len = data_len;
         sendmsg_req.SetVarData( data.get() );
@@ -518,7 +518,7 @@ private:
     typedef void (ServerConnMgr::*RspBodyHandlerFunc)(const std::string& rsp_body);
     typedef std::map< int, RspBodyHandlerFunc > RspBodyHandlerContainerT;
     RspBodyHandlerContainerT  m_allrsphandlers;
-    const static int KEEP_ALIVE_TIME = 30000; // server is 120000, here we half it to keep tcp alive
+    const static int KEEP_ALIVE_TIME = 30000; //  keep tcp alive
     LoggerCategory g_log;
     PBHandlerContainerT m_pb_handlers;
 };

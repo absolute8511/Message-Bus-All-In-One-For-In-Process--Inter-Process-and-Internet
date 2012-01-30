@@ -296,16 +296,14 @@ private:
     {
         perror("error:");
         printf("client %d , error happened.\n", sp_tcp->GetFD());
-        m_sendmsg_clientnum--;
-        m_client_senders.erase(sp_tcp->GetFD());
+        receiver_onClose(sp_tcp);
         return;
     }
     void receiver_onTimeout(TcpSockSmartPtr sp_tcp)
     {
         //printf("client %d , timeout. in receiver.\n", sp_tcp->GetFD());
-        m_sendmsg_clientnum--;
-        m_client_senders.erase(sp_tcp->GetFD());
-        sp_tcp->DisAllowSend();
+        receiver_onClose(sp_tcp);
+        sp_tcp->Close();
         return;
     }
 

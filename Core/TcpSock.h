@@ -47,12 +47,13 @@ public:
     void UpdateTimeout();
     void RenewTimeout();
     void  SetEventLoop(EventLoop* pev);
+    // 服务端需要有主动关闭时,调用DisAllowSend即可
+    // if no response, the server can close the fd. must be called in loop thread
+    void  Close(bool needremove = true);
 private:
     void SendDataInLoop(const std::string& data);
     void SendDataInLoop(const char* pdata, size_t size);
     void  ShutDownWrite();
-    // 服务端需要有主动关闭时,调用DisAllowSend即可
-    void  Close(bool needremove = true);
     // 每个fd都有2个缓冲区,一个输入,一个输出, 必须使用连续内存, 因此deque不能使用(deque分块连续)
     SockBufferT m_inbuf;
     SockBufferT m_outbuf;

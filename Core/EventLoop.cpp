@@ -152,7 +152,7 @@ void* EventLoop::Loop(void* param)
     while(true)
     {
         struct timeval tv;
-        tv.tv_sec = 10; //TIMEOUT_SHORT;
+        tv.tv_sec = 1; //TIMEOUT_SHORT;
         tv.tv_usec = 200000;
 
         if(el->m_terminal)
