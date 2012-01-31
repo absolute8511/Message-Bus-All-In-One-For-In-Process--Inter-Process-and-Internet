@@ -25,9 +25,9 @@ SelectWaiter::~SelectWaiter()
 
 void SelectWaiter::DestroyWaiter()
 {
-    SockWaiterBase::DestroyWaiter();
     if(m_notify_pipe[0] != -1)
         FD_CLR(m_notify_pipe[0], &m_readfds);
+    SockWaiterBase::DestroyWaiter();
 }
 
 // note: can not be locked by caller.
