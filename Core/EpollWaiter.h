@@ -13,6 +13,9 @@ public:
     ~EpollWaiter();
     // must run in the event loop thread.
     int  Wait(TcpSockContainerT& allready, struct timeval& tv);
+    void DestroyWaiter();
+protected:
+    bool UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp);
 private:
     int m_epfd;
     struct epoll_event*  m_prealloc_events;

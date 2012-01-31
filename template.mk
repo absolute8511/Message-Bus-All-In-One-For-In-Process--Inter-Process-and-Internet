@@ -31,7 +31,7 @@ release:
 	make "BUILD=release"
 
 $(OBJDIR)/%.pb.o:%.pb.cc
-	$(CC) -c `pkg-config --cflags protobuf` $< -o $@
+	$(CC) -c $(CPPFLAGS) `pkg-config --cflags protobuf` $< -o $@
 
 $(OBJDIR)/%.o:%.cpp
 	$(CC) -c $(CPPFLAGS) $< -o $@

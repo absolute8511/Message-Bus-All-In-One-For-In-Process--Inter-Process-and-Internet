@@ -19,14 +19,82 @@ EpollWaiter::EpollWaiter()
         g_log.Log(lv_error, "epoll create fd failed.");
     }
     m_prealloc_events = (struct epoll_event*)calloc(EPOLL_QUEUE_LEN, sizeof(struct epoll_event));
+    if(m_prealloc_events == NULL)
+    {
+        g_log.Log(lv_error, "calloc returned null.");
+    }
+    struct epoll_event ev;
+    if(m_notify_pipe[0] >= 0)
+    {
+        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
+        ev.data.fd = m_notify_pipe[0];
+        epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_notify_pipe[0], &ev);
+    }
 }
 
 EpollWaiter::~EpollWaiter()
 {
+}
+
+void EpollWaiter::DestroyWaiter()
+{
+    if(m_notify_pipe[0] != -1 && m_epfd >=0 )
+    {
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
+        ev.data.fd = m_notify_pipe[0];
+        epoll_ctl(m_epfd, EPOLL_CTL_DEL, m_notify_pipe[0], &ev);
+    }
     if(m_epfd >= 0)
         close(m_epfd);
-    free(m_prealloc_events);
+    if(m_prealloc_events)
+    {
+        free(m_prealloc_events);
+        m_prealloc_events = NULL;
+    }
+    SockWaiterBase::DestroyWaiter();
 }
+// note: can not be locked by caller.
+// only can be called in waiter thread.
+bool EpollWaiter::UpdateTcpSockEvent(TcpSockSmartPtr sp_tcp)
+{
+    assert(sp_tcp);
+    int fd = sp_tcp->GetFD();
+    assert(fd != -1);
+    if( fd == -1 )
+    {
+        return false;
+    }
+    SockEvent so_ev = sp_tcp->GetCaredSockEvent();
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET | EPOLLOUT;
+    ev.data.fd = fd;
+    epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, &ev);
+
+    ev.events = 0;
+
+    if(so_ev.hasRead())
+    {
+        ev.events |= EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
+    }
+    if(so_ev.hasWrite())
+    {
+        ev.events |= EPOLLOUT | EPOLLET;
+    }
+    if(so_ev.hasException())
+    {
+        ev.events |= EPOLLERR | EPOLLET;
+    }
+    if(so_ev.hasAny())
+    {
+        if(::epoll_ctl(m_epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+        {
+            g_log.Log(lv_error, "add epoll fd failed,fd:%d", fd);
+        }
+    }
+    return true;
+}
+
 
 int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
 {
@@ -34,79 +102,39 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         return -1;
     allready.clear();
 
-    ClearClosedTcpSock();
-
-    // the m_waiting_tcpsocks will be modified by other thread, so we copy it to a temp map.
-    TcpSockContainerT tmp_tcpsocks;
-    {
-        core::common::locker_guard guard(m_waiting_tcpsocks_lock);
-        tmp_tcpsocks = m_waiting_tcpsocks;
-    }
-    struct epoll_event ev;
     struct epoll_event *events = m_prealloc_events;
     memset(events, 0, EPOLL_QUEUE_LEN*sizeof(struct epoll_event));
-    TcpSockContainerT::const_iterator cit = tmp_tcpsocks.begin();
-    int maxfd = 0;
+    TcpSockContainerT::const_iterator cit = m_waiting_tcpsocks.begin();
     std::map<int, TcpSockSmartPtr> tcpsocks_tmpmap;
     //bool writetimeout_detect = false; 
-    while(cit != tmp_tcpsocks.end())
+    while(cit != m_waiting_tcpsocks.end())
     {
-        assert(*cit);
-        int fd = (*cit)->GetFD();
-        assert(fd != -1);
-        if( fd == -1 )
-        {
-            ++cit;
-            continue;
-        }
-        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
-        if( (*cit)->IsNeedWrite() )
-        {
-            ev.events |= EPOLLOUT;
-            //writetimeout_detect = true;
-        }
-        ev.data.fd = fd;
-        if(::epoll_ctl(m_epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
-        {
-            g_log.Log(lv_error, "add epoll fd failed,fd:%d", fd);
-        }
-        tcpsocks_tmpmap[fd] = *cit;
-        if(fd > maxfd)
-            maxfd = fd;
+        tcpsocks_tmpmap[(*cit)->GetFD()] = *cit;
         ++cit;
-    }
-    if(m_notify_pipe[0] != 0)
-    {
-        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET;
-        ev.data.fd = m_notify_pipe[0];
-        epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_notify_pipe[0], &ev);
-        if(m_notify_pipe[0] > maxfd)
-            maxfd = m_notify_pipe[0];
     }
     // the document said: the fd will be removed automatically when the fd is closed.
     int ms = tv.tv_usec/1000 + tv.tv_sec*1000;
     int retfds = ::epoll_wait(m_epfd, events, EPOLL_QUEUE_LEN, ms);
-    //if(retfds > 0)
-    //    g_log.Log(lv_debug, "epoll wait return, retfds:%d", retfds);
+    // clear immediately after select waking up to speed up eventloop.
+    int notifytype = GetAndClearNotify();
+    if(notifytype & REMOVED)
+    {
+        ClearClosedTcpSock();
+    }
     if(retfds < 0)
     {
         g_log.Log(lv_error, "error happened while epoll wait");
         return retfds;
     }
-    GetAndClearNotify();
     //if(retfds == 0 && writetimeout_detect)
     //{
     //    printf("warning: wait to send data timeout, network may broken, data is not sended.\n");
     //    g_log.Log(lv_warn, "send data wait timeout, net broken");
     //}
-    // clean the cared fd
-    TcpSockContainerT::iterator tcp_it = tmp_tcpsocks.begin();
-    while(tcp_it != tmp_tcpsocks.end())
+    TcpSockContainerT::iterator tcp_it = m_waiting_tcpsocks.begin();
+    // first update timeout for all waiting tcp.
+    while(tcp_it != m_waiting_tcpsocks.end())
     {
-        ev.events = EPOLLIN | EPOLLERR | EPOLLPRI | EPOLLET | EPOLLOUT;
-        ev.data.fd = (*tcp_it)->GetFD();
-        epoll_ctl(m_epfd, EPOLL_CTL_DEL, (*tcp_it)->GetFD(), &ev);
-        // first update timeout for all waiting tcp.
         (*tcp_it)->UpdateTimeout();
         ++tcp_it;
     }
