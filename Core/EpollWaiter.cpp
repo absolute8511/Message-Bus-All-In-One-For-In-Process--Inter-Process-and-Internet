@@ -109,7 +109,7 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     //bool writetimeout_detect = false; 
     while(cit != m_waiting_tcpsocks.end())
     {
-        if(!(*it)->IsClosed())
+        if(!(*cit)->IsClosed())
             tcpsocks_tmpmap[(*cit)->GetFD()] = *cit;
         ++cit;
     }
