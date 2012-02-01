@@ -109,7 +109,8 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     //bool writetimeout_detect = false; 
     while(cit != m_waiting_tcpsocks.end())
     {
-        tcpsocks_tmpmap[(*cit)->GetFD()] = *cit;
+        if(!(*it)->IsClosed())
+            tcpsocks_tmpmap[(*cit)->GetFD()] = *cit;
         ++cit;
     }
     // the document said: the fd will be removed automatically when the fd is closed.
