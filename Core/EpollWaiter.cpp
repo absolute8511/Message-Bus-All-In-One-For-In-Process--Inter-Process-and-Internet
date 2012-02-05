@@ -34,6 +34,7 @@ EpollWaiter::EpollWaiter()
 
 EpollWaiter::~EpollWaiter()
 {
+    DestroyWaiter();
 }
 
 void EpollWaiter::DestroyWaiter()
@@ -104,6 +105,8 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
 
     struct epoll_event *events = m_prealloc_events;
     memset(events, 0, EPOLL_QUEUE_LEN*sizeof(struct epoll_event));
+    //bool writetimeout_detect = false; 
+    //
     TcpSockContainerT::const_iterator cit = m_waiting_tcpsocks.begin();
     std::map<int, TcpSockSmartPtr> tcpsocks_tmpmap;
     //bool writetimeout_detect = false; 
@@ -136,29 +139,30 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     // first update timeout for all waiting tcp.
     while(tcp_it != m_waiting_tcpsocks.end())
     {
-        (*tcp_it)->UpdateTimeout();
+        (*tcp_it).second->UpdateTimeout();
         ++tcp_it;
     }
     for(int i = 0; i < retfds; i++)
     {
-        if(events[i].data.fd == m_notify_pipe[0])
+        const struct epoll_event& ev = events[i];
+        if(ev.data.fd == m_notify_pipe[0])
             continue;
-        TcpSockSmartPtr sptcp = tcpsocks_tmpmap[events[i].data.fd];
+        TcpSockSmartPtr sptcp = tcpsocks_tmpmap[ev.data.fd];
         assert(sptcp);
         sptcp->ClearEvent();
         bool isready = false;
-        if( (events[i].events & EPOLLIN) ||
-            (events[i].events & EPOLLPRI) )
+        if( (ev.events & EPOLLIN) ||
+            (ev.events & EPOLLPRI) )
         {
             sptcp->AddEvent(EV_READ);
             isready = true;
         }
-        if(events[i].events & EPOLLOUT)
+        if(ev.events & EPOLLOUT)
         {
             sptcp->AddEvent(EV_WRITE);
             isready = true;
         }
-        if(events[i].events & EPOLLERR)
+        if(ev.events & EPOLLERR)
         {
             sptcp->AddEvent(EV_EXCEPTION);
             isready = true;

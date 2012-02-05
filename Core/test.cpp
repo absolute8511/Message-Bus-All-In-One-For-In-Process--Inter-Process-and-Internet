@@ -423,7 +423,7 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            GenerateNextTestParam(param);
+            /*GenerateNextTestParam(param);
             // 测试广播消息
             NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
@@ -432,14 +432,15 @@ void testremotemsgbus()
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
-            //GenerateNextTestParam(param);
+            GenerateNextTestParam(param);
             // 测试群组消息，通过服务器可以发送群组消息
-            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+            NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             GenerateNextTestParam(param);
             // 测试向指定的接收者发送消息
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            */
             sendcounter++;
             //if(sendcounter % 100 == 0)
             //{
@@ -447,6 +448,7 @@ void testremotemsgbus()
             if(sendcounter >= 3000)
                 break;
             //}
+            /*
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
@@ -456,10 +458,10 @@ void testremotemsgbus()
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            
+            */
             GenerateNextTestParam(param);
             std::string rsp_content;
-            printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
+            //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
             bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
                 param, rsp_content, mintimeout);
             //threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
@@ -467,7 +469,7 @@ void testremotemsgbus()
             if(success)
             {
                 printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
-                printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
+                //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
                 //if(mintimeout > 1)
                   //  --mintimeout;
             }
@@ -487,6 +489,7 @@ void testremotemsgbus()
         xp2.get_Int("testkey", value);
         printf("total %d msgs sended. last param:%d.\n", sendcounter, value);
         int64_t endtime = utility::GetTickCount();
+        printf("%d msgs used time:%lld\n", sendcounter, endtime - starttime);
         g_log.Log(lv_debug, "%d msgs used time:%lld\n", sendcounter, endtime - starttime);
     }
 
@@ -504,7 +507,10 @@ void testSyncGetData(const std::string& clientname, const std::string& msgid, Ms
     std::string rsp;
     bool success = NetMsgBusGetData(clientname, msgid, param, rsp, timeout_sec);
     if(success)
+    {
         printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp.c_str());
+        ;
+    }
     else
     {
         g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu. errmsg:%s\n", timeout_sec, (uint64_t)pthread_self(), rsp.c_str());

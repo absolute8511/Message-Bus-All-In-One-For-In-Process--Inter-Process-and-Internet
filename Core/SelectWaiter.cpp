@@ -100,9 +100,9 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         FD_ZERO(&m_writefds);
         FD_ZERO(&m_exceptfds);
         TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
-        while(it != m_waiting_tcpsocks.end() && *it)
+        while(it != m_waiting_tcpsocks.end() && (*it).second)
         {
-            UpdateTcpSockEvent(*it);
+            UpdateTcpSockEvent((*it).second);
             ++it;
         }
         FD_SET(m_notify_pipe[0], &m_readfds);
@@ -114,37 +114,38 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     // the new added tcp container and waiting tcp container have been seperated,
     // so no lock need here. no other thread can modify the waiting tcp container.
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
-    while(it != m_waiting_tcpsocks.end() && *it)
+    while(it != m_waiting_tcpsocks.end() && (*it).second)
     {
-        assert(*it);
-        int fd = (*it)->GetFD();
+        assert((*it).second);
+        TcpSockSmartPtr sptcp = (*it).second;
+        int fd = sptcp->GetFD();
         assert(fd != -1);
-        (*it)->ClearEvent();
+        sptcp->ClearEvent();
         bool isready = false;
         if(FD_ISSET(fd, &readfds))
         {
-            (*it)->AddEvent(EV_READ);
+            sptcp->AddEvent(EV_READ);
             isready = true;
         }
         if(FD_ISSET(fd, &writefds))
         {
-            (*it)->AddEvent(EV_WRITE);
+            sptcp->AddEvent(EV_WRITE);
             isready = true;
         }
         if(FD_ISSET(fd, &exceptfds))
         {
-            (*it)->AddEvent(EV_EXCEPTION);
+            sptcp->AddEvent(EV_EXCEPTION);
             isready = true;
         }
         if(isready)
         {
-            (*it)->RenewTimeout();
-            allready.push_back(*it);
+            sptcp->RenewTimeout();
+            allready[(long)sptcp.get()] = sptcp;
         }
         else
         {
             // whether timeout is ready.
-            (*it)->UpdateTimeout();
+            sptcp->UpdateTimeout();
         }
 
         ++it;

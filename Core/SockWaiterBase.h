@@ -4,10 +4,12 @@
 #include "TcpSock.h"
 #include "lock.hpp"
 #include <deque>
+#include <map>
 
 namespace core { namespace net {
 
-typedef std::deque< TcpSockSmartPtr > TcpSockContainerT;
+//typedef std::deque< TcpSockSmartPtr > TcpSockContainerT;
+typedef std::map< long, TcpSockSmartPtr > TcpSockContainerT;
 
 enum kSockActiveNotify
 {

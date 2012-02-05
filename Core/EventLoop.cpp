@@ -205,12 +205,13 @@ void* EventLoop::Loop(void* param)
         TcpSockContainerT::iterator ready_tcp_it = readytcps.begin();
         for( ; ready_tcp_it != readytcps.end(); ++ready_tcp_it) 
         {
-            TcpSockSmartPtr sp_tcp = *ready_tcp_it;
+            TcpSockSmartPtr sp_tcp = (*ready_tcp_it).second;
             if(sp_tcp)
             {
                 sp_tcp->HandleEvent();
             }
         }// end of while of readytcps process.
+        readytcps.clear();
 
     }// end of while(true)
     el->m_event_waiter->DestroyWaiter();

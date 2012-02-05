@@ -166,23 +166,35 @@ bool is_prefix_matching(const std::string& left, const std::string& right)
 }
 
 // give a method to select the best client to server to realize load balancing. 
-template<typename TContainer, typename TElem> 
-bool msgbus_select_best_client(const TContainer& container, TElem& bestelem)
+bool msgbus_select_best_client(const TcpSockContainerT& container, TcpSockSmartPtr& bestelem)
 {
     if ( container.size() > 0 )
     {
-        typename TContainer::const_iterator pos = container.begin();
+        TcpSockContainerT::const_iterator pos = container.begin();
+        bestelem = pos->second;
+        int randselect = (int)((rand()/(RAND_MAX + 1.0))*(container.size()));
+        while (pos != container.end())
+        {
+            if( randselect-- < 0)
+            {
+                bestelem = pos->second;
+                break;
+            }
+            ++pos;
+        }
+        if(bestelem)
+            return true;
+    }
+    return false;
+}
+// give a method to select the best client to server to realize load balancing. 
+bool msgbus_select_best_client(const ClientHostContainer& container, ClientHost& bestelem)
+{
+    if ( container.size() > 0 )
+    {
+        ClientHostContainer::const_iterator pos = container.begin();
         bestelem = *pos;
         int randselect = (int)((rand()/(RAND_MAX + 1.0))*(container.size()));
-        /*while (pos != it->second.end())
-          {
-          if( randselect-- < 0)
-          {
-          host = *pos;
-          break;
-          }
-          ++pos;
-          }*/
         bestelem = *(pos + randselect);
         return true;
     }
@@ -436,9 +448,11 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
     ActiveClientTcpContainer::iterator it = active_clients.begin();
     while( it != active_clients.end() )
     {
-        TcpSockContainerT::iterator clientit = std::find_if(it->second.begin(), it->second.end(), IsSameTcpSock( sp_tcp ));
+        //TcpSockContainerT::iterator clientit = std::find_if(it->second.begin(), it->second.end(), IsSameTcpSock( sp_tcp ));
+        TcpSockContainerT::iterator clientit = it->second.find((long)sp_tcp.get());
         if( clientit != it->second.end() )
         {   
+            assert(sp_tcp->GetFD() == clientit->second->GetFD());
             g_log.Log(lv_debug, "removing client fd: %d , one active of service:%s ,in server.",
                 sp_tcp->GetFD(), it->first.c_str());
             it->second.erase(clientit);
@@ -520,7 +534,7 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
             {
                 it->second.push_back(host);
                 // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
-                active_clients[service_name].push_back(sp_tcp);
+                active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
                 g_log.Log(lv_debug, "a new host added to an exist service.");
                 g_log.Log(lv_debug, "new add server host is %s:%d.", 
                     inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
@@ -532,7 +546,7 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
             container.push_back(host);
             available_services[service_name] = container;
             // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
-            active_clients[service_name].push_back(sp_tcp);
+            active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
             g_log.Log(lv_debug, "new register service, server host is %s:%d.",
                 inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
         }
@@ -683,7 +697,7 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
     strncpy(rsp.dest_name, req.dest_name, MAX_SERVICE_NAME);
     g_log.Log(lv_debug, "rsp client name:%s.", rsp.dest_name);
 
-    ClientHost host;
+    ClientHostContainer::value_type host;
     core::common::locker_guard guard(g_activeclients_locker);
     ServiceContainer::const_iterator cit = available_services.find(dest_name);
     if(cit != available_services.end() && msgbus_select_best_client(cit->second, host))
@@ -801,16 +815,18 @@ void* msgbus_process_thread( void* param )
                         TcpSockSmartPtr destclient;
                         if(msgbus_select_best_client(cit->second, destclient))
                         {
-                            destclients.push_back(destclient);
+                            destclients[(long)destclient.get()] = destclient;
                         }
                     }
                     ++cit;
                 }
             }
-            for(size_t i = 0; i < destclients.size(); ++i)
+            TcpSockContainerT::iterator destit = destclients.begin();
+            while(destit != destclients.end())
             {
-                if(destclients[i])
-                    destclients[i]->SendData(reqtask.data.get(), reqtask.data_len);
+                if(destit->second)
+                    destit->second->SendData(reqtask.data.get(), reqtask.data_len);
+                ++destit;
             }
         }
         if(hasbroadtask)
@@ -821,23 +837,27 @@ void* msgbus_process_thread( void* param )
                 ActiveClientTcpContainer::const_iterator cit = active_clients.begin();
                 while(cit != active_clients.end())
                 {
+                    //TcpSockSmartPtr destclient;
                     TcpSockSmartPtr destclient;
                     if(msgbus_select_best_client(cit->second, destclient))
                     {
-                        allclients[cit->first].push_back(destclient);
+                        allclients[cit->first][(long)destclient.get()] = destclient;
                     }
                     ++cit;
                 }
             }
-            ActiveClientTcpContainer::const_iterator allcit = allclients.begin();
-            while( allcit != allclients.end() )
+            ActiveClientTcpContainer::iterator allit = allclients.begin();
+            while( allit != allclients.end() )
             {
-                for(size_t i = 0;i < allcit->second.size(); ++i)
+                TcpSockContainerT::iterator destit = allit->second.begin();
+                while(destit != allit->second.end())
+                //for(size_t i = 0;i < allcit->second.size(); ++i)
                 {
-                    if( allcit->second[i] )
-                        allcit->second[i]->SendData(broadcast_task.data.get(), broadcast_task.data_len);
+                    if( destit->second )
+                        destit->second->SendData(broadcast_task.data.get(), broadcast_task.data_len);
+                    ++destit;
                 }
-                ++allcit;
+                ++allit;
             }
         }
     }

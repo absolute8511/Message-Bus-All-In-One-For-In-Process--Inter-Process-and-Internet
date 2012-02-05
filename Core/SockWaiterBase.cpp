@@ -157,14 +157,20 @@ void SockWaiterBase::UpdateTcpSockInLoop(TcpSockSmartPtr sp_tcp)
         if(!m_running)
             return;
         {
-            TcpSockContainerT::iterator waitingit = std::find_if(m_waiting_tcpsocks.begin(),
-                m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
+            //TcpSockContainerT::iterator waitingit = std::find_if(m_waiting_tcpsocks.begin(),
+            //    m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
+            TcpSockContainerT::const_iterator waitingit = m_waiting_tcpsocks.find((long)sp_tcp.get());
             if( waitingit == m_waiting_tcpsocks.end() )
             {
                 // m_waiting_tcpsocks can only be modified by waiter thread.
                 // so lock can put here to protect modified.
                 core::common::locker_guard guard(m_common_lock);
-                m_waiting_tcpsocks.push_back(sp_tcp);
+                //m_waiting_tcpsocks.push_back(sp_tcp);
+                m_waiting_tcpsocks[(long)sp_tcp.get()] = sp_tcp;
+            }
+            else
+            {
+                assert(sp_tcp->GetFD() == waitingit->second->GetFD());
             }
         }
     }
@@ -205,16 +211,16 @@ TcpSockSmartPtr SockWaiterBase::GetTcpSockByDestHost(const std::string& ip, unsi
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
     while( it != m_waiting_tcpsocks.end() )
     {
-        assert(*it);
+        assert((*it).second);
         std::string destip;
         unsigned short int destport;
-        if(*it)
+        if((*it).second)
         {
-            (*it)->GetDestHost(destip, destport);
+            (*it).second->GetDestHost(destip, destport);
             if( destip == ip && destport == port )
             {
-                if( !(*it)->IsClosed() && (*it)->Writeable() )
-                    return *it;
+                if( !(*it).second->IsClosed() && (*it).second->Writeable() )
+                    return (*it).second;
                 break;
             }
         }
@@ -231,9 +237,9 @@ void SockWaiterBase::DisAllowAllTcpSend()
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
     while( it != m_waiting_tcpsocks.end() )
     {
-        assert(*it);
-        if(*it)
-            (*it)->DisAllowSend();
+        assert((*it).second);
+        if((*it).second)
+            (*it).second->DisAllowSend();
         ++it;
     }
 }
@@ -254,11 +260,19 @@ void SockWaiterBase::ClearClosedTcpSock()
     assert(m_evloop->IsInLoopThread());
     if(!m_running)
         return;
-    TcpSockContainerT::iterator result = std::remove_if(m_waiting_tcpsocks.begin(),
-        m_waiting_tcpsocks.end(), IsTcpClosed);
-    TcpSockContainerT::iterator erasestart = result;
     core::common::locker_guard guard(m_common_lock);
-    m_waiting_tcpsocks.erase(erasestart, m_waiting_tcpsocks.end());
+    TcpSockContainerT::iterator reit = m_waiting_tcpsocks.begin();
+    while(reit != m_waiting_tcpsocks.end())
+    {
+        if( IsTcpClosed(reit->second) )
+        {
+            m_waiting_tcpsocks.erase(reit++);
+        }
+        else
+        {
+            ++reit;
+        }
+    }
 }
 
 // clear all tcps when terminate.
