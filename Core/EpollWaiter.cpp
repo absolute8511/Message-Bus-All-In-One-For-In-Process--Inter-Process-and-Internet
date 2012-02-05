@@ -112,8 +112,8 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     //bool writetimeout_detect = false; 
     while(cit != m_waiting_tcpsocks.end())
     {
-        if(!(*cit)->IsClosed())
-            tcpsocks_tmpmap[(*cit)->GetFD()] = *cit;
+        if(!(*cit).second->IsClosed())
+            tcpsocks_tmpmap[(*cit).second->GetFD()] = cit->second;
         ++cit;
     }
     // the document said: the fd will be removed automatically when the fd is closed.
@@ -173,7 +173,7 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         if(isready)
         {
             sptcp->RenewTimeout();
-            allready.push_back(sptcp);
+            allready[(long)sptcp->GetFD()] = sptcp;
             //g_log.Log(lv_debug, "fd:%d has been added to ready socket, total ready:%zu", sptcp->GetFD(), allready.size());
         }
     }
