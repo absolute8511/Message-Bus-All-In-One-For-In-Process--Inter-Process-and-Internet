@@ -140,7 +140,7 @@ int SelectWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         if(isready)
         {
             sptcp->RenewTimeout();
-            allready[(long)sptcp.get()] = sptcp;
+            allready[(long)sptcp->GetFD()] = sptcp;
         }
         else
         {

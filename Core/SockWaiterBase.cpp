@@ -159,18 +159,20 @@ void SockWaiterBase::UpdateTcpSockInLoop(TcpSockSmartPtr sp_tcp)
         {
             //TcpSockContainerT::iterator waitingit = std::find_if(m_waiting_tcpsocks.begin(),
             //    m_waiting_tcpsocks.end(), IsSameTcpSock( sp_tcp ));
-            TcpSockContainerT::const_iterator waitingit = m_waiting_tcpsocks.find((long)sp_tcp.get());
+            //TcpSockContainerT::const_iterator waitingit = m_waiting_tcpsocks.find((long)sp_tcp.get());
+            TcpSockContainerT::const_iterator waitingit = m_waiting_tcpsocks.find((long)sp_tcp->GetFD());
             if( waitingit == m_waiting_tcpsocks.end() )
             {
                 // m_waiting_tcpsocks can only be modified by waiter thread.
                 // so lock can put here to protect modified.
                 core::common::locker_guard guard(m_common_lock);
                 //m_waiting_tcpsocks.push_back(sp_tcp);
-                m_waiting_tcpsocks[(long)sp_tcp.get()] = sp_tcp;
+                m_waiting_tcpsocks[(long)sp_tcp->GetFD()] = sp_tcp;
             }
             else
             {
                 assert(sp_tcp->GetFD() == waitingit->second->GetFD());
+                m_waiting_tcpsocks[(long)sp_tcp->GetFD()] = sp_tcp;
             }
         }
     }

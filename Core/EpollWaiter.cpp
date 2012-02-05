@@ -107,15 +107,15 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     memset(events, 0, EPOLL_QUEUE_LEN*sizeof(struct epoll_event));
     //bool writetimeout_detect = false; 
     //
-    TcpSockContainerT::const_iterator cit = m_waiting_tcpsocks.begin();
-    std::map<int, TcpSockSmartPtr> tcpsocks_tmpmap;
+    //TcpSockContainerT::const_iterator cit = m_waiting_tcpsocks.begin();
+    //std::map<int, TcpSockSmartPtr> tcpsocks_tmpmap;
     //bool writetimeout_detect = false; 
-    while(cit != m_waiting_tcpsocks.end())
-    {
-        if(!(*cit).second->IsClosed())
-            tcpsocks_tmpmap[(*cit).second->GetFD()] = cit->second;
-        ++cit;
-    }
+    //while(cit != m_waiting_tcpsocks.end())
+    //{
+    //    if(!(*cit).second->IsClosed())
+    //        tcpsocks_tmpmap[(*cit).second->GetFD()] = cit->second;
+    //    ++cit;
+    //}
     // the document said: the fd will be removed automatically when the fd is closed.
     int ms = tv.tv_usec/1000 + tv.tv_sec*1000;
     int retfds = ::epoll_wait(m_epfd, events, EPOLL_QUEUE_LEN, ms);
@@ -147,7 +147,7 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         const struct epoll_event& ev = events[i];
         if(ev.data.fd == m_notify_pipe[0])
             continue;
-        TcpSockSmartPtr sptcp = tcpsocks_tmpmap[ev.data.fd];
+        TcpSockSmartPtr sptcp = m_waiting_tcpsocks[ev.data.fd];
         assert(sptcp);
         sptcp->ClearEvent();
         bool isready = false;
