@@ -9,7 +9,7 @@ THREADPOOL_OBJS:= threadpool.o named_worker_thread.o threadpoolimp.o multitimer.
 MSGBUS_CLIENT_DYLIB := libmsgbusclient.3.dylib
 MSGBUS_CLIENT_OBJS := msgbus_client.o msgbus_def.o msgbus_interface.o MsgHandlerMgr.o NetMsgBusFilterMgr.o
 MSGBUS_SERVER_OBJS := msgbus_server.o msgbus_def.o
-EVENTLOOPPOOL_OBJS := EventLoopPool.o EventLoop.o SockWaiterBase.o SelectWaiter.o TcpSock.o 
+EVENTLOOPPOOL_OBJS := EventLoopPool.o EventLoop.o SockWaiterBase.o SelectWaiter.o TcpSock.o FastBuffer.o
 LOGGER_OBJS := SimpleLogger.o
 
 PBPROTO := NetMsgBus.PBParam.proto
@@ -19,7 +19,7 @@ export PBSRCFILES := $(PBPROTO:%.proto=%.pb.cc)
 export SRCFILES := EventLoop.cpp EventLoopPool.cpp msgbus_client.cpp msgbus_interface.cpp \
 	msgbus_server.cpp SelectWaiter.cpp SockWaiterBase.cpp TcpSock.cpp threadpool.cpp \
 	named_worker_thread.cpp threadpoolimp.cpp multitimer.cpp MsgHandlerMgr.cpp \
-	NetMsgBusFilterMgr.cpp SimpleLogger.cpp 
+	NetMsgBusFilterMgr.cpp SimpleLogger.cpp FastBuffer.cpp
 
 include $(MAKEROOT)/template-mac.mk
 

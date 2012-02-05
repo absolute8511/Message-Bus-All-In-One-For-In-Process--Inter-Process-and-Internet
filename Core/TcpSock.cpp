@@ -244,7 +244,7 @@ void TcpSock::SendDataInLoop(const char* pdata, size_t size)
         m_errno = EPIPE;
         return;
     }
-    m_outbuf.insert(m_outbuf.end(), pdata, pdata + size);
+    m_outbuf.push_back(pdata, size);
     if(m_evloop)
     {
         m_caredev.AddEvent(EV_WRITE);
@@ -337,11 +337,12 @@ void TcpSock::HandleEvent()
             }
             else if(readed > 0)
             {
-                m_inbuf.insert(m_inbuf.end(), tmpbuf.get(), tmpbuf.get() + readed);
+                //m_inbuf.insert(m_inbuf.end(), tmpbuf.get(), tmpbuf.get() + readed);
+                m_inbuf.push_back(tmpbuf.get(), readed);
                 size_t n = 0;
                 if(m_sockcb.onRead)
                 {
-                    n = m_sockcb.onRead(shared_from_this(), &m_inbuf[0], m_inbuf.size());
+                    n = m_sockcb.onRead(shared_from_this(), m_inbuf.data(), m_inbuf.size());
                 }
                 else
                 {
@@ -356,7 +357,7 @@ void TcpSock::HandleEvent()
                     }
                     else
                     {
-                        m_inbuf.erase(m_inbuf.begin(), m_inbuf.begin() + n);
+                        m_inbuf.pop_front(n);
                     }
                 }
             }
@@ -383,11 +384,11 @@ void TcpSock::HandleEvent()
     {
         while(true)
         {
-            int writed = write(m_fd, &m_outbuf[0], m_outbuf.size());
+            int writed = write(m_fd, m_outbuf.data(), m_outbuf.size());
             if(writed > 0)
             {
                 //g_log.Log(lv_debug, "write on fd:%d. bytes:%d", m_fd, writed);
-                m_outbuf.erase(m_outbuf.begin(), m_outbuf.begin() + writed);
+                m_outbuf.pop_front(writed);
                 if(m_outbuf.empty())
                 {
                     if(m_evloop)

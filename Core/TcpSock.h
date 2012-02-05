@@ -4,6 +4,7 @@
 #include "SockHandler.h"
 #include "SockEvent.hpp"
 #include "lock.hpp"
+#include "FastBuffer.h"
 #include <vector>
 #include <boost/shared_array.hpp>
 #include <boost/shared_ptr.hpp>
@@ -19,7 +20,8 @@ public:
     TcpSock(int fd, const std::string& ip, unsigned short int port);
     ~TcpSock();
 
-    typedef std::vector< char > SockBufferT;
+    //typedef std::vector< char > SockBufferT;
+    typedef FastBuffer SockBufferT;
 
     int GetFD() const;
     bool  IsClosed() const;

@@ -7,7 +7,7 @@ export MAKEROOT := ..
 THREADPOOL_OBJS:= threadpool.o named_worker_thread.o threadpoolimp.o multitimer.o
 MSGBUS_SERVER_OBJS := msgbus_server.o msgbus_def.o
 MSGBUS_CLIENT_OBJS := msgbus_client.o msgbus_def.o msgbus_interface.o MsgHandlerMgr.o NetMsgBusFilterMgr.o
-EVENTLOOPPOOL_OBJS := EventLoopPool.o EventLoop.o SockWaiterBase.o SelectWaiter.o TcpSock.o EpollWaiter.o
+EVENTLOOPPOOL_OBJS := EventLoopPool.o EventLoop.o SockWaiterBase.o SelectWaiter.o TcpSock.o EpollWaiter.o FastBuffer.o
 LOGGER_OBJS := SimpleLogger.o
 
 PBPROTO := NetMsgBus.PBParam.proto
@@ -16,7 +16,7 @@ export PBSRCFILES := $(PBPROTO:%.proto=%.pb.cc)
 export SRCFILES := EventLoop.cpp EventLoopPool.cpp msgbus_client.cpp msgbus_interface.cpp \
 	msgbus_server.cpp SelectWaiter.cpp SockWaiterBase.cpp TcpSock.cpp threadpool.cpp \
 	named_worker_thread.cpp threadpoolimp.cpp multitimer.cpp MsgHandlerMgr.cpp \
-	NetMsgBusFilterMgr.cpp SimpleLogger.cpp EpollWaiter.cpp
+	NetMsgBusFilterMgr.cpp SimpleLogger.cpp EpollWaiter.cpp FastBuffer.cpp
 
 include $(MAKEROOT)/template.mk
 

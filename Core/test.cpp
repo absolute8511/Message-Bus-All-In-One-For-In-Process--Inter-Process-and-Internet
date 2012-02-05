@@ -468,7 +468,7 @@ void testremotemsgbus()
             //        "msg_netmsgbus_testgetdata", param, 15), 0);
             if(success)
             {
-                printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
+                //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
                 //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
                 //if(mintimeout > 1)
                   //  --mintimeout;
@@ -508,7 +508,7 @@ void testSyncGetData(const std::string& clientname, const std::string& msgid, Ms
     bool success = NetMsgBusGetData(clientname, msgid, param, rsp, timeout_sec);
     if(success)
     {
-        printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp.c_str());
+        //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp.c_str());
         ;
     }
     else
