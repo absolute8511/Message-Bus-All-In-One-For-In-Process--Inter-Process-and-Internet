@@ -3,7 +3,9 @@
 #include <stdio.h>
 
 #define DEFAULT_SIZE 128
+#define GROW_SIZE    DEFAULT_SIZE*16
 #define SHRINK_SIZE  1024*DEFAULT_SIZE
+#define DOWN_SIZE    SHRINK_SIZE/16
 
 namespace core { namespace net {
 
@@ -27,9 +29,9 @@ void FastBuffer::push_back(const char* pdata, size_t datasize)
     if(m_innerdata.size() > SHRINK_SIZE)
     {
         // auto shrink if there is much free space for a long time.
-        if(m_innerdata.size() - size() - datasize > SHRINK_SIZE/8*7)
+        if((int)m_innerdata.size() - (int)size() - (int)datasize > m_innerdata.size()/8*7)
         {
-            if(m_halfcounter++ > 10)
+            if(m_halfcounter++ > 100)
             {
                 printf("shrinking fastbuffer :%zu, used:%zu\n", m_innerdata.size(), size());
                 m_halfcounter = 0;
@@ -39,7 +41,7 @@ void FastBuffer::push_back(const char* pdata, size_t datasize)
                 }
                 m_writestart = size();
                 m_readstart = 0;
-                m_innerdata.resize(m_innerdata.size()/2);
+                m_innerdata.resize(m_innerdata.size() - DOWN_SIZE);
             }
         }
         else
@@ -51,7 +53,7 @@ void FastBuffer::push_back(const char* pdata, size_t datasize)
     if(m_innerdata.size() - m_writestart < datasize)
     {
         // get more size
-        m_innerdata.resize(m_writestart + datasize, 0);
+        m_innerdata.resize(m_writestart*2 + datasize + GROW_SIZE, 0);
         printf("resizing fastbuffer :%zu, used:%zu\n", m_innerdata.size(), size());
     }
     std::copy(pdata, pdata + datasize, m_innerdata.begin() + m_writestart);

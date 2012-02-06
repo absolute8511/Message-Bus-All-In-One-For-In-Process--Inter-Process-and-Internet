@@ -423,7 +423,7 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            /*GenerateNextTestParam(param);
+            GenerateNextTestParam(param);
             // 测试广播消息
             NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
@@ -440,7 +440,7 @@ void testremotemsgbus()
             // 测试向指定的接收者发送消息
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-            */
+            
             sendcounter++;
             //if(sendcounter % 100 == 0)
             //{
@@ -448,7 +448,7 @@ void testremotemsgbus()
             if(sendcounter >= 3000)
                 break;
             //}
-            /*
+            
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
@@ -458,8 +458,10 @@ void testremotemsgbus()
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            */
-            GenerateNextTestParam(param);
+            
+
+            /*
+             * GenerateNextTestParam(param);
             std::string rsp_content;
             //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
             bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
@@ -480,7 +482,7 @@ void testremotemsgbus()
             }
             
             threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
-                    "msg_netmsgbus_testgetdata", param, 1), 0);
+                    "msg_netmsgbus_testgetdata", param, 1), 0);*/
         }
         printf("\n");
         core::XParam xp2;
