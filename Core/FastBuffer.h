@@ -12,13 +12,13 @@ public:
     ~FastBuffer();
     inline const char* data()
     {
-        assert(m_readstart <= m_innerdata.size());
+        assert(m_readstart <= (int)m_innerdata.size());
         return &*m_innerdata.begin() + m_readstart;
     }
     // the valid offset of char* returned by data()
     inline size_t size() const
     {
-        assert(m_writestart <= m_readstart);
+        assert(m_writestart >= m_readstart);
         return m_writestart - m_readstart;
     }
     void  push_back(const char * pdata, size_t datasize);
