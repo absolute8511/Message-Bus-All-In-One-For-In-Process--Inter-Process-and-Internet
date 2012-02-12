@@ -87,6 +87,7 @@ private:
     int  m_timeout_renew;
     bool m_is_timeout_need;
     EventLoop* m_evloop;
+    int  m_tmp_blocksize;
 };
 
 typedef boost::shared_ptr< TcpSock > TcpSockSmartPtr;

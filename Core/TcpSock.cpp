@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <boost/bind.hpp>
 
-#define BLOCK_SIZE 8096*8
+#define BLOCK_SIZE 1024*8
 #define MAX_BUF_SIZE BLOCK_SIZE*64*8
 #define ALIVE_NUM  5
 
@@ -32,6 +32,7 @@ TcpSock::TcpSock()
     m_evloop(NULL)
 {
     tmpbuf.reset(new char[BLOCK_SIZE]);
+    m_tmp_blocksize = BLOCK_SIZE;
 }
 TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
     :m_fd(fd),
@@ -47,6 +48,7 @@ TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
     m_desthost.host_port = port;
     //g_log.Log(lv_debug, "new client tcp %s:%d.fd:%d", ip.c_str(), port, m_fd);
     tmpbuf.reset(new char[BLOCK_SIZE]);
+    m_tmp_blocksize = BLOCK_SIZE;
 }
 
 TcpSock::~TcpSock()
@@ -323,7 +325,7 @@ void TcpSock::HandleEvent()
         while(true)
         {
             // reuse the tmpbuf to store the readed data.
-            int readed = read(m_fd, tmpbuf.get(), BLOCK_SIZE);
+            int readed = read(m_fd, tmpbuf.get(), m_tmp_blocksize);
             if(readed == 0)
             {
                 if(m_sockcb.onClose)
@@ -339,6 +341,12 @@ void TcpSock::HandleEvent()
             {
                 //m_inbuf.insert(m_inbuf.end(), tmpbuf.get(), tmpbuf.get() + readed);
                 m_inbuf.push_back(tmpbuf.get(), readed);
+                if(readed == m_tmp_blocksize)
+                {
+                    g_log.Log(lv_debug, "resizing the tmpbuf size to %d.", m_tmp_blocksize*2);
+                    tmpbuf.reset(new char[m_tmp_blocksize*2]);
+                    m_tmp_blocksize *= 2;
+                }
                 size_t n = 0;
                 if(m_sockcb.onRead)
                 {
