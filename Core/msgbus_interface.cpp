@@ -335,7 +335,8 @@ bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj)
         MsgHandlerWeakObjList::iterator hit = it->second.begin();
         while(hit != it->second.end())
         {
-            if(MsgHandlerStrongRef(hit->lock()) == sp_handler_obj)
+            MsgHandlerStrongRef sh = hit->lock();
+            if(sh && (sh.get() == sp_handler_obj.get()) )
             {
                 //已经注册过
                 isexist = true;
@@ -515,6 +516,50 @@ bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, M
 int  NetMsgBusQueryServices(const std::string& match_str)
 {
     return msgbus_query_available_services(match_str);
+}
+
+void printAllMsgHandler(const std::string& msgid)
+{
+    MsgHandlerStrongObjList msg_handlers;
+    // 先将该消息的处理对象队列的强引用拿出来
+    {
+        core::common::locker_guard guard(s_msghandlers_locker);
+        MsgHandlerObjContainerT::iterator it = s_all_msghandler_objs.find(msgid);
+        if( it != s_all_msghandler_objs.end() )
+        {
+            MsgHandlerWeakObjList& weak_msg_handlers = it->second;
+            MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
+            while(weakit != weak_msg_handlers.end())
+            {
+                MsgHandlerStrongRef sh = weakit->lock();
+                if(sh)
+                {
+                    // strong ref is validate
+                    msg_handlers.push_back(sh);
+                    ++weakit;
+                }
+                else
+                {
+                    // clear invalidate weakref.
+                    g_log.Log(lv_warn, "removing invalidate weak ref.");
+                    weakit = weak_msg_handlers.erase(weakit);
+                }
+            }
+            if(weak_msg_handlers.empty())
+            {
+                s_all_msghandler_objs.erase(it);
+            }
+        }
+    }
+    printf("msgid:%s, all registered handlers are:\n", msgid.c_str());
+    MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
+    while(hit != msg_handlers.end())
+    {
+        if(*hit && hit->get())
+            printf("typeid:%s\t", typeid(*(hit->get())).name());
+        ++hit;
+    }
+    printf("\n");
 }
 
 }

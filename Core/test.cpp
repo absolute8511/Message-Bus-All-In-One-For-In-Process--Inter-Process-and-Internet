@@ -333,6 +333,7 @@ void testlocalmsgbus()
         PostMsg("msg_testMsgBus3", param);
         GenerateNextTestParam(param);*/
         sleep(3);
+        printAllMsgHandler("msg_testMsgBus1");
         testmsgbus->RemoveHandler("msg_testMsgBus1");
         /*SendMsg("msg_testMsgBus1", param);
         GenerateNextTestParam(param);
@@ -350,6 +351,7 @@ void testlocalmsgbus()
     PostMsg("msg_testMsgBus2", param);
     GenerateNextTestParam(param);
     SendMsg("msg_testMsgBus1", param);
+    printAllMsgHandler("msg_testMsgBus1");
     sleep(2);
 }
 // 测试远程消息总线，跨进程跨机器等
@@ -461,8 +463,7 @@ void testremotemsgbus()
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             
 
-            
-            /*
+           /* 
             GenerateNextTestParam(param);
             std::string rsp_content;
             //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());

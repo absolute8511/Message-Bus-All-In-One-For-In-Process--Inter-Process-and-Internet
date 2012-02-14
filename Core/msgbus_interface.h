@@ -136,6 +136,7 @@ namespace NetMsgBus
     // query all available services that are registered on the net message bus server
     int  NetMsgBusQueryServices(const std::string& match_str);
  
+    void printAllMsgHandler(const std::string& msgid);
 }
 
 
