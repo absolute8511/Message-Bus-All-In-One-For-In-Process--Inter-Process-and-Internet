@@ -309,21 +309,26 @@ void testlocalmsgbus()
     PostMsg("msg_testMsgBus2", param);
     GenerateNextTestParam(param);*/
     {
-        /*SendMsg("msg_testMsgBus1", param);
+        SendMsg("msg_testMsgBus1", param);
         GenerateNextTestParam(param);
         PostMsg("msg_testMsgBus1", param);
         GenerateNextTestParam(param);
         PostMsg("msg_testMsgBus2", param);
-        GenerateNextTestParam(param);*/
+        GenerateNextTestParam(param);
         MyMsgHandlerClassPtr testmsgbus;
         MsgHandlerMgr::GetInstance(testmsgbus);
-        /*SendMsg("msg_testCachedParam", param);
+        SendMsg("msg_testCachedParam", param);
         GenerateNextTestParam(param);
         SendMsg("msg_testMsgBus2", param);
         GenerateNextTestParam(param);
         SendMsg("msg_testMsgBus3", param);
-        sleep(3);*/
-        /*GenerateNextTestParam(param);
+        for(int i= 0; i < 30; i++)
+        {
+            GenerateNextTestParam(param);
+            PostMsg("msg_testMsgBus2", param);
+        }
+        sleep(3);
+        GenerateNextTestParam(param);
         PostMsg("msg_testCachedParam", param);
         GenerateNextTestParam(param);
         SendMsg("msg_testMsgBus1", param);
@@ -331,15 +336,15 @@ void testlocalmsgbus()
         PostMsg("msg_testMsgBus2", param);
         GenerateNextTestParam(param);
         PostMsg("msg_testMsgBus3", param);
-        GenerateNextTestParam(param);*/
+        GenerateNextTestParam(param);
         sleep(3);
         printAllMsgHandler("msg_testMsgBus1");
         testmsgbus->RemoveHandler("msg_testMsgBus1");
-        /*SendMsg("msg_testMsgBus1", param);
+        SendMsg("msg_testMsgBus1", param);
         GenerateNextTestParam(param);
         SendMsg("msg_testMsgBus2", param);
         GenerateNextTestParam(param);
-        testmsgbus->printCachedParam();*/
+        testmsgbus->printCachedParam();
     }
     /*PostMsg("msg_testMsgBus2", param);
     GenerateNextTestParam(param);
@@ -463,7 +468,6 @@ void testremotemsgbus()
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             
 
-           /* 
             GenerateNextTestParam(param);
             std::string rsp_content;
             //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
@@ -485,7 +489,7 @@ void testremotemsgbus()
             }
             
             threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
-                    "msg_netmsgbus_testgetdata", param, 1), 0);*/
+                    "msg_netmsgbus_testgetdata", param, 1), 0);
         }
         printf("\n");
         core::XParam xp2;

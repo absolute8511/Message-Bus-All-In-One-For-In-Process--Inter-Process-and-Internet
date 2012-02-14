@@ -112,7 +112,7 @@ ReadySendMsgResultT  s_ready_sendmsgs;
 core::common::condition s_ready_sendmsg_cond;
 core::common::locker  s_ready_sendmsg_locker;
 
-static bool SendMsgInMsgBusThread(const std::string& msgid, MsgBusParam& param);
+static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks);
 
 // 启动线程池以及消息处理线程
 bool InitMsgBus(long hmainwnd)
@@ -172,7 +172,7 @@ bool PostMsg(const std::string& msgid, boost::shared_array<char> param, uint32_t
 }
 
 // process message in msgbus thread 
-static bool SendMsgInMsgBusThread(const std::string& msgid, MsgBusParam& param)
+static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks)
 {
     assert(pthread_equal(pthread_self(), msgbus_tid));
     MsgHandlerStrongObjList msg_handlers;
@@ -206,39 +206,46 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgBusParam& param)
             }
         }
     }
-    MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
+    MsgBusParam param;
     bool result = false;
-    bool is_continue = true;
-    assert(param.paramlen);
-    // make a copy of param to prevent interfering with other msg handlers.
-    MsgBusParam original_param = param.DeepCopy();
-
-    // 注：改造后的list是个强引用的list,list中的对象一定还有效
-    while(hit != msg_handlers.end())
+    while(!alltasks.empty())
     {
-        if(*hit != NULL)
-        {
-#ifndef NDEBUG
-            time_t start_ = core::utility::GetTickCount();
-#endif
-            MsgBusParam input_param = original_param.DeepCopy();
-            result = (*hit)->OnMsg(msgid, input_param, is_continue);
-#ifndef NDEBUG
-            time_t end_ = core::utility::GetTickCount();
-            if( (end_ - start_) > 500 )
-                g_log.Log(lv_debug, "===msg:%s process time is too long %lld ms.===", msgid.c_str(),
-                    (int64_t)(end_ - start_));
-#endif
-            if(result)
-            {
-                param = input_param;
-            }
-        }
-        if(!is_continue)
-            break;
-        ++hit;
-    }
+        param = alltasks.front().msgparam;
+        alltasks.pop_front();
 
+        MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
+        bool is_continue = true;
+        assert(param.paramlen);
+        // make a copy of param to prevent interfering with other msg handlers.
+        MsgBusParam original_param = param.DeepCopy();
+
+        // 注：改造后的list是个强引用的list,list中的对象一定还有效
+        while(hit != msg_handlers.end())
+        {
+            if(*hit != NULL)
+            {
+#ifndef NDEBUG
+                time_t start_ = core::utility::GetTickCount();
+#endif
+                MsgBusParam input_param = original_param.DeepCopy();
+                result = (*hit)->OnMsg(msgid, input_param, is_continue);
+#ifndef NDEBUG
+                time_t end_ = core::utility::GetTickCount();
+                if( (end_ - start_) > 500 )
+                    g_log.Log(lv_debug, "===msg:%s process time is too long %lld ms.===", msgid.c_str(),
+                        (int64_t)(end_ - start_));
+#endif
+                if(result)
+                {
+                    param = input_param;
+                }
+            }
+            if(!is_continue)
+                break;
+            ++hit;
+        }
+
+    }
     return result;
 
 }
@@ -254,7 +261,9 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
     pthread_t callertid = pthread_self();
     if(pthread_equal(callertid, msgbus_tid) != 0)
     {
-        return SendMsgInMsgBusThread(msgid, param);
+        MsgTaskQueue taskqueue;
+        taskqueue.push_back(MsgTask(msgid, param, callertid));
+        return SendMsgInMsgBusThread(msgid, taskqueue);
     }
     {
         core::common::locker_guard guard(s_ready_sendmsg_locker);
@@ -394,7 +403,9 @@ void* MsgTaskProcessProc(void*)
     {
         if( s_msgbus_terminate )
             break;
-        MsgTask mtask;
+        MsgTaskQueue mtasks;
+        MsgTask firsttask;
+        std::string curmsgid;
         {
             core::common::locker_guard guard(s_msgtask_locker);
             while(s_all_msgtask.empty() && s_all_sendmsgtask.empty())
@@ -409,25 +420,38 @@ void* MsgTaskProcessProc(void*)
             // process sendmsg first
             if(!s_all_sendmsgtask.empty())
             {
-                mtask = s_all_sendmsgtask.front();
+                firsttask = s_all_sendmsgtask.front();
+                curmsgid = firsttask.msgid;
+                mtasks.push_back(firsttask);
                 s_all_sendmsgtask.pop_front();
             }
             else
             {
-                mtask = s_all_msgtask.front();
+                firsttask = s_all_msgtask.front();
+                curmsgid = firsttask.msgid;
+                mtasks.push_back(firsttask);
                 s_all_msgtask.pop_front();
+                // to enhance the performance, we merge the same msgid when using postmsg
+                while(!s_all_msgtask.empty())
+                {
+                    MsgTask t = s_all_msgtask.front();
+                    if(t.msgid != curmsgid)
+                        break;
+                    mtasks.push_back(t);
+                    s_all_msgtask.pop_front();
+                }
             }
         }
         if(s_msgbus_terminate)
             break;
         // 在消息处理线程中以同步的方式处理消息
-        bool ret = SendMsgInMsgBusThread(mtask.msgid, mtask.msgparam);
-        if(pthread_equal(mtask.callertid, msgbus_tid) == 0)
+        bool ret = SendMsgInMsgBusThread(curmsgid, mtasks);
+        if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
         {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
             core::common::locker_guard guard(s_ready_sendmsg_locker);
-            s_ready_sendmsgs[mtask.callertid].ready = true;
-            s_ready_sendmsgs[mtask.callertid].rspparam = mtask.msgparam;
-            s_ready_sendmsgs[mtask.callertid].rspresult = ret;
+            s_ready_sendmsgs[firsttask.callertid].ready = true;
+            s_ready_sendmsgs[firsttask.callertid].rspparam = firsttask.msgparam;
+            s_ready_sendmsgs[firsttask.callertid].rspresult = ret;
             //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
             s_ready_sendmsg_cond.notify_all();
         }
