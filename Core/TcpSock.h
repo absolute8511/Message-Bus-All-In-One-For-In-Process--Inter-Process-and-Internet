@@ -74,7 +74,7 @@ private:
     int  m_alive_counter;
     int  m_errno;
 
-    boost::shared_array<char> tmpbuf;
+    //boost::shared_array<char> tmpbuf;
     //core::common::locker m_lock;
     //SockBufferT  m_tmpoutbuf;
     struct DestHost

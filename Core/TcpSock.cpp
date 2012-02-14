@@ -31,7 +31,6 @@ TcpSock::TcpSock()
     m_is_timeout_need(false),
     m_evloop(NULL)
 {
-    tmpbuf.reset(new char[BLOCK_SIZE]);
     m_tmp_blocksize = BLOCK_SIZE;
 }
 TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
@@ -47,7 +46,6 @@ TcpSock::TcpSock(int fd, const std::string& ip, unsigned short int port)
     m_desthost.host_ip = ip;
     m_desthost.host_port = port;
     //g_log.Log(lv_debug, "new client tcp %s:%d.fd:%d", ip.c_str(), port, m_fd);
-    tmpbuf.reset(new char[BLOCK_SIZE]);
     m_tmp_blocksize = BLOCK_SIZE;
 }
 
@@ -312,12 +310,6 @@ void TcpSock::HandleEvent()
     assert(m_evloop->IsInLoopThread());
     if(IsClosed())
         return;
-    /*if( m_outbuf.size() < MAX_BUF_SIZE)
-    {
-        //core::common::locker_guard guard(m_lock);
-        m_outbuf.insert(m_outbuf.end(), m_tmpoutbuf.begin(), m_tmpoutbuf.end());
-        m_tmpoutbuf.clear();
-    }*/
     if( m_sockev.hasRead() )
     {
         // edge triggered mode in epoll will not notify the old event again,
@@ -325,7 +317,8 @@ void TcpSock::HandleEvent()
         while(true)
         {
             // reuse the tmpbuf to store the readed data.
-            int readed = read(m_fd, tmpbuf.get(), m_tmp_blocksize);
+            m_inbuf.ensurewritable(m_tmp_blocksize);
+            int readed = read(m_fd, m_inbuf.writablebegin(), m_tmp_blocksize);
             if(readed == 0)
             {
                 if(m_sockcb.onClose)
@@ -339,12 +332,10 @@ void TcpSock::HandleEvent()
             }
             else if(readed > 0)
             {
-                //m_inbuf.insert(m_inbuf.end(), tmpbuf.get(), tmpbuf.get() + readed);
-                m_inbuf.push_back(tmpbuf.get(), readed);
+                m_inbuf.push_back_withoutdata(readed);
                 if(readed == m_tmp_blocksize)
                 {
                     g_log.Log(lv_debug, "resizing the tmpbuf size to %d.", m_tmp_blocksize*2);
-                    tmpbuf.reset(new char[m_tmp_blocksize*2]);
                     m_tmp_blocksize *= 2;
                 }
                 size_t n = 0;

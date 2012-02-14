@@ -23,6 +23,35 @@ FastBuffer::~FastBuffer()
     clear();
 }
 
+void FastBuffer::ensurewritable(size_t datasize)
+{
+    if(m_innerdata.size() < m_writestart + datasize)
+    {
+        if(m_innerdata.size() > MAX_SIZE)
+        {
+            std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + size(), m_innerdata.begin());
+            m_writestart = size();
+            m_readstart = 0;
+            if( m_innerdata.size() < datasize + size() )
+            {
+#ifndef NDEBUG
+                printf("tcp buffer may overflow! now size:%zu\n", m_innerdata.size());
+#endif
+                // get more size
+                m_innerdata.resize(size() + datasize, 0);
+            }
+        }
+        else
+        {
+            // get more size
+            m_innerdata.resize(m_writestart*2 + datasize + GROW_SIZE, 0);
+#ifndef NDEBUG
+            //printf("resizing fastbuffer :%zu, used:%zu\n", m_innerdata.size(), size());
+#endif
+        }
+    }
+}
+
 void FastBuffer::push_back(const char* pdata, size_t datasize)
 {
     if(datasize == 0)
@@ -53,31 +82,7 @@ void FastBuffer::push_back(const char* pdata, size_t datasize)
         }
     }
     assert(m_writestart <= (int)m_innerdata.size());
-    if(m_innerdata.size() < m_writestart + datasize)
-    {
-        if(m_innerdata.size() > MAX_SIZE)
-        {
-            std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + size(), m_innerdata.begin());
-            m_writestart = size();
-            m_readstart = 0;
-            if( m_innerdata.size() < datasize + size() )
-            {
-#ifndef NDEBUG
-                printf("tcp buffer may overflow! now size:%zu", m_innerdata.size());
-#endif
-                // get more size
-                m_innerdata.resize(size() + datasize, 0);
-            }
-        }
-        else
-        {
-            // get more size
-            m_innerdata.resize(m_writestart*2 + datasize + GROW_SIZE, 0);
-#ifndef NDEBUG
-            //printf("resizing fastbuffer :%zu, used:%zu\n", m_innerdata.size(), size());
-#endif
-        }
-    }
+    ensurewritable(datasize);
     std::copy(pdata, pdata + datasize, m_innerdata.begin() + m_writestart);
     m_writestart += datasize;
 }
