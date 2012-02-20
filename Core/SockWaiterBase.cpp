@@ -41,6 +41,8 @@ SockWaiterBase::~SockWaiterBase()
 
 void SockWaiterBase::DestroyWaiter()
 {
+    if(!m_running)
+        return;
     assert(m_evloop->IsInLoopThread());
     core::common::locker_guard guard(m_common_lock);
     m_running = false;
@@ -145,6 +147,8 @@ void SockWaiterBase::UpdateTcpSockInLoop(TcpSockSmartPtr sp_tcp)
     if(!sp_tcp)
         return;
 
+    if(!m_running)
+        return;
     assert(m_evloop->IsInLoopThread());
 
     SockEvent ev = sp_tcp->GetCaredSockEvent();
@@ -196,9 +200,9 @@ bool SockWaiterBase::AddTcpSock(TcpSockSmartPtr sp_tcp)
 // must be called in the waiter thread.
 void SockWaiterBase::RemoveTcpSock(TcpSockSmartPtr sp_tcp)
 {
-    assert(m_evloop->IsInLoopThread());
     if(!m_running)
         return;
+    assert(m_evloop->IsInLoopThread());
     sp_tcp->SetCaredSockEvent(SockEvent());
     // need remove.
     UpdateTcpSockEvent(sp_tcp);
@@ -233,9 +237,9 @@ TcpSockSmartPtr SockWaiterBase::GetTcpSockByDestHost(const std::string& ip, unsi
 
 void SockWaiterBase::DisAllowAllTcpSend()
 {
-    assert(m_evloop->IsInLoopThread());
     if(!m_running)
         return;
+    assert(m_evloop->IsInLoopThread());
     TcpSockContainerT::iterator it = m_waiting_tcpsocks.begin();
     while( it != m_waiting_tcpsocks.end() )
     {
@@ -258,10 +262,10 @@ static bool IsTcpClosed(TcpSockSmartPtr sp_tcp)
 // other thread expect the waiter thread can call this function. 
 void SockWaiterBase::ClearClosedTcpSock()
 {
-    //g_log.Log(lv_debug, "clear closed tcp");
-    assert(m_evloop->IsInLoopThread());
     if(!m_running)
         return;
+    //g_log.Log(lv_debug, "clear closed tcp");
+    assert(m_evloop->IsInLoopThread());
     core::common::locker_guard guard(m_common_lock);
     TcpSockContainerT::iterator reit = m_waiting_tcpsocks.begin();
     while(reit != m_waiting_tcpsocks.end())
