@@ -691,13 +691,18 @@ void testeventloop()
 
 void testSimpleLogger()
 {
+    int pid = getpid();
+    int i = 100;
+    while(--i > 0)
+    {
     time_t t = time(NULL);
     int64_t tl = (int64_t)t;
-    printf("print %lld\n", (int64_t)t);
-    printf("print longlongint %lld\n", tl);
-    g_log.Log(lv_debug, "test lv_debug time_t printf %lld", (int64_t)t);
-    g_log.Log(lv_info, "test lv_info time_t printf %lld", (int64_t)t);
-    g_log.Log(lv_error, "test lv_error time_t printf %lld", (int64_t)t);
+    g_log.Log(lv_debug, "test lv_debug time_t printf %lld, pid:%d", (int64_t)t, pid);
+    g_log.Log(lv_info, "test lv_info time_t printf %lld, pid:%d", (int64_t)t, pid);
+    g_log.Log(lv_error, "test lv_error time_t printf %lld, pid:%d", (int64_t)t, pid);
+    usleep(100000);
+    }
+    sleep(3);
 }
 
 int main()
@@ -717,8 +722,8 @@ int main()
     //testeventloop();
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
-    testlocalmsgbus();
-    testremotemsgbus();
+    //testlocalmsgbus();
+    //testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     DestroyMsgBus();

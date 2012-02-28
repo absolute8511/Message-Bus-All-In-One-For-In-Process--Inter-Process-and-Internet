@@ -7,6 +7,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/fcntl.h>
 #include <string>
 #include <vector>
 #include <boost/bind.hpp>
@@ -80,6 +81,18 @@ void SimpleLogger::write2file()
     // save im msg
     if(m_logfile == NULL)
         return;
+    struct flock fl;
+    fl.l_type = F_WRLCK;
+    fl.l_whence =  SEEK_SET;
+    fl.l_start =  0;
+    fl.l_len = 0;
+    fl.l_pid = getpid();
+    while(fcntl(fileno(m_logfile), F_SETLKW, &fl) == -1)
+    {
+        perror("fcntl get lock error.");
+        if(errno != EINTR)
+            return;
+    }
     std::vector<LogInfo> writinglogs;
     {
         core::common::locker_guard guard(m_lock);
@@ -92,6 +105,12 @@ void SimpleLogger::write2file()
             info.category_.c_str(), info.content_.c_str(), info.time_.c_str());
     }
     fflush(m_logfile);
+    fl.l_type = F_UNLCK;
+    if(fcntl(fileno(m_logfile), F_SETLK, &fl) == -1)
+    {
+        perror("fcntl release lock error.");
+        assert(false);
+    }
 }
 
 LoggerCategory::LoggerCategory(const std::string& category)
