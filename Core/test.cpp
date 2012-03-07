@@ -82,6 +82,18 @@ void init_signals_env()
 void testSyncGetData(const std::string& clientname, const std::string& msgid,
     MsgBusParam param, int32_t timeout_sec);
 
+void GenerateNextTestParam(MsgBusParam& param, const string& longtestdata)
+{
+    int datavalue;
+    core::XParam inxp;
+    Param2CustomType(param, inxp);
+    inxp.get_Int("testkey", datavalue);
+    datavalue += 1;
+    core::XParam xp;
+    xp.put_Int("testkey", datavalue);
+    xp.put_Str("testlongdata", longtestdata);
+    param = CustomType2Param(xp);
+}
 void GenerateNextTestParam(MsgBusParam& param)
 {
     int datavalue;
@@ -152,9 +164,11 @@ public:
     {
         core::XParam xp;
         Param2CustomType(param, xp);
-        //int value = 0;
-        //xp.get_Int("testkey", value);
-        //printf("process the (msg,param): (%s,%d) in %s , in thread:%lu.\n", msgid.c_str(), value, func_name.c_str(), (unsigned long)pthread_self());
+        int value = 0;
+        string longdata;
+        xp.get_Int("testkey", value);
+        xp.get_Str("testlongdata", longdata);
+        printf("process the (msg,param): (%s,%d,longdatasize:%zu) in %s , in thread:%lu.\n", msgid.c_str(), value, longdata.size(), func_name.c_str(), (unsigned long)pthread_self());
         //m_counter++;
         //if(m_counter % 100 == 0)
         //{
@@ -420,9 +434,16 @@ void testremotemsgbus()
         printf("press any key other than 'q' to start send test message to netmsgbus.\n");
         core::XParam xp;
         xp.put_Int("testkey", 100);
+        string longdata;
+        for(int i = 0; i < 1000000; i++)
+        {
+            longdata.push_back(char(i%180 + 32));
+        }
+        xp.put_Str("testlongdata", longdata);
         MsgBusParam param = CustomType2Param(xp);
         uint32_t sendcounter = 0;
 
+        
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
         int mintimeout = 1;
@@ -431,7 +452,7 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            GenerateNextTestParam(param);
+            GenerateNextTestParam(param, longdata);
             // 测试广播消息
             NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
@@ -440,7 +461,7 @@ void testremotemsgbus()
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
-            GenerateNextTestParam(param);
+            GenerateNextTestParam(param, longdata);
             // 测试群组消息，通过服务器可以发送群组消息
             NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
@@ -460,7 +481,7 @@ void testremotemsgbus()
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            GenerateNextTestParam(param);
+            GenerateNextTestParam(param, longdata);
             NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             GenerateNextTestParam(param);
@@ -715,7 +736,7 @@ int main()
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);
     printf("main in thread: %lld.\n",(uint64_t)pthread_self());
-    testSimpleLogger();
+    //testSimpleLogger();
     //sleep(30000);
     //testthreadpool();
     //testXParam();
@@ -723,7 +744,7 @@ int main()
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
     //testlocalmsgbus();
-    //testremotemsgbus();
+    testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     DestroyMsgBus();

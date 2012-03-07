@@ -29,7 +29,7 @@ void FastBuffer::ensurewritable(size_t datasize)
     {
         if(m_innerdata.size() > MAX_SIZE)
         {
-            std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + size(), m_innerdata.begin());
+            std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + m_writestart, m_innerdata.begin());
             m_writestart = size();
             m_readstart = 0;
             if( m_innerdata.size() < datasize + size() )
@@ -69,7 +69,7 @@ void FastBuffer::push_back(const char* pdata, size_t datasize)
                 m_halfcounter = 0;
                 if(m_readstart > 0)
                 {
-                    std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + size(), m_innerdata.begin());
+                    std::copy(m_innerdata.begin() + m_readstart, m_innerdata.begin() + m_writestart, m_innerdata.begin());
                 }
                 m_writestart = size();
                 m_readstart = 0;
