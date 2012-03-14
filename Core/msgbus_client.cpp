@@ -33,8 +33,9 @@ bool msgbus_sendmsg_direct_to_client(const std::string& clientname, uint32_t dat
 bool msgbus_register_client_receiver(const std::string& clientip, unsigned short int& clientport, 
     const std::string& clientname, kServerBusyState busy_state /* = LOW */)
 {
-    // first start receiver at local port. then register to server.
-    if(!s_receiver_mgr.StartReceiver(clientport)) 
+    // if need listen local the first start receiver at local port. then register to server.
+    // if no local listen then just for connect identify
+    if((clientport != 0) && !s_receiver_mgr.StartReceiver(clientport)) 
     {
         return false;
     }

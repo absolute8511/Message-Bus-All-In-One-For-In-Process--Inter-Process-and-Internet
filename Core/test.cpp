@@ -119,7 +119,7 @@ public:
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
         //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
-        //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+        NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
         //sleep(1);
         return true;
     }
@@ -128,7 +128,7 @@ public:
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
         //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
-        //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+        NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
         //sleep(1);
         return true;
     }
@@ -431,11 +431,17 @@ void testremotemsgbus()
     {
         thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0);
         thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
+        unsigned short suggest_port = 0;
+        if( 0 != NetMsgBusRegReceiver("test.onlyformsgbus_server_conn", "", suggest_port))
+        {
+            printf("register only msgbus server connection client error.\n");
+            return;
+        }
         printf("press any key other than 'q' to start send test message to netmsgbus.\n");
         core::XParam xp;
         xp.put_Int("testkey", 100);
         string longdata;
-        for(int i = 0; i < 1000000; i++)
+        for(int i = 0; i < 10000; i++)
         {
             longdata.push_back(char(i%180 + 32));
         }
@@ -474,7 +480,7 @@ void testremotemsgbus()
             //if(sendcounter % 100 == 0)
             //{
             printf("{%d}\n ", sendcounter);
-            if(sendcounter >= 3000)
+            if(sendcounter >= 30)
                 break;
             //}
             

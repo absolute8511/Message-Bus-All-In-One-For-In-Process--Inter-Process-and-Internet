@@ -542,9 +542,14 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
         }
         else
         {
-            ClientHostContainer container;
-            container.push_back(host);
-            available_services[service_name] = container;
+            if(host.server_port != 0)
+            {
+                // port is zero just mean not a service provider, just connected for send/recv data 
+                // by the tcp connection of msgbus_server.
+                ClientHostContainer container;
+                container.push_back(host);
+                available_services[service_name] = container;
+            }
             // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
             active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
             g_log.Log(lv_debug, "new register service, server host is %s:%d.",
