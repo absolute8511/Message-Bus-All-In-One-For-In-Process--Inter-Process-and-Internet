@@ -206,12 +206,12 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
             }
         }
     }
-    MsgBusParam param;
     bool result = false;
-    while(!alltasks.empty())
+    int cnt = alltasks.size();
+    while(cnt-- > 0)
     {
-        param = alltasks.front().msgparam;
-        alltasks.pop_front();
+        MsgBusParam& param = alltasks.front().msgparam;
+        //alltasks.pop_front();
 
         MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
         bool is_continue = true;
@@ -446,14 +446,19 @@ void* MsgTaskProcessProc(void*)
             break;
         // 在消息处理线程中以同步的方式处理消息
         bool ret = SendMsgInMsgBusThread(curmsgid, mtasks);
-        if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
-        {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
-            core::common::locker_guard guard(s_ready_sendmsg_locker);
-            s_ready_sendmsgs[firsttask.callertid].ready = true;
-            s_ready_sendmsgs[firsttask.callertid].rspparam = firsttask.msgparam;
-            s_ready_sendmsgs[firsttask.callertid].rspresult = ret;
-            //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
-            s_ready_sendmsg_cond.notify_all();
+        while(!mtasks.empty())
+        {
+            firsttask = mtasks.front();
+            mtasks.pop_front();
+            if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
+            {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
+                core::common::locker_guard guard(s_ready_sendmsg_locker);
+                s_ready_sendmsgs[firsttask.callertid].ready = true;
+                s_ready_sendmsgs[firsttask.callertid].rspparam = firsttask.msgparam;
+                s_ready_sendmsgs[firsttask.callertid].rspresult = ret;
+                //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
+                s_ready_sendmsg_cond.notify_all();
+            }
         }
     }
     s_msgbus_running = false;
