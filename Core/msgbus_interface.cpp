@@ -245,6 +245,7 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
             ++hit;
         }
 
+        //g_log.Log(core::lv_debug, "process a sendmsg in msgbus onmsg :%lld, cnt:%d \n", (int64_t)core::utility::GetTickCount(), cnt);
     }
     return result;
 
@@ -285,22 +286,26 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
     {
         {
             core::common::locker_guard guard(s_ready_sendmsg_locker);
+
+            // ready flag must be confirmed first, or maybe wait for a lost notify.
+            ready = s_ready_sendmsgs[callertid].ready;
+            //g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
+            //   (uint64_t)callertid, msgid.c_str(), ready?1:0);
+            if(ready)
+            {
+                //g_log.Log(core::lv_debug, "process a sendmsg in msgbus finished:%lld\n", (int64_t)core::utility::GetTickCount());
+                param = s_ready_sendmsgs[callertid].rspparam;
+                bool ret = s_ready_sendmsgs[callertid].rspresult;
+                s_ready_sendmsgs.erase(callertid);
+                return ret;
+            }
+
             int retcode = s_ready_sendmsg_cond.waittime(s_ready_sendmsg_locker, &ts);
             if(retcode == ETIMEDOUT)
             {
                 g_log.Log(lv_warn, "sendmsg ready wakeup for timeout. msgid:%s.", msgid.c_str());
                 s_ready_sendmsgs.erase(callertid);
                 return false;
-            }
-            ready = s_ready_sendmsgs[callertid].ready;
-            //g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
-            //   (uint64_t)callertid, msgid.c_str(), ready?1:0);
-            if(ready)
-            {
-                param = s_ready_sendmsgs[callertid].rspparam;
-                bool ret = s_ready_sendmsgs[callertid].rspresult;
-                s_ready_sendmsgs.erase(callertid);
-                return ret;
             }
         }
     }

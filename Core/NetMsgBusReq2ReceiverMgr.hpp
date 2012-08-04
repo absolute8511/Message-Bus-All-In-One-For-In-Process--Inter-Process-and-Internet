@@ -10,6 +10,7 @@
 #include "EventLoopPool.h"
 #include "SelectWaiter.h"
 #include "TcpSock.h"
+#include "SimpleLogger.h"
 #include <errno.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -74,7 +75,8 @@ protected:
     Req2ReceiverMgr()
         :m_server_connmgr(NULL),
         m_req2receiver_running(false),
-        m_req2receiver_terminate(false)
+        m_req2receiver_terminate(false),
+        sync_sessionid_(0)
     {
     }
 public:
@@ -256,22 +258,25 @@ private:
         while(true)
         {
             size_t needlen;
+            uint32_t sync_sid;
             uint32_t data_len;
-            needlen = sizeof(data_len);
+            
+            needlen = sizeof(sync_sid) + sizeof(data_len);
             if(size < needlen)
                 return readedlen;
-            data_len = *((uint32_t*)pdata);
+            sync_sid = ntohl(*((uint32_t*)pdata));
+            pdata += sizeof(sync_sid);
+            data_len = ntohl(*((uint32_t*)pdata));
             pdata += sizeof(data_len);
             needlen += data_len;
             if(size < needlen)
                 return readedlen;
             {
-                //printf("one sync data returned. fd:%d.\n", sp_tcp->GetFD());
+                //printf("one sync data returned. sid:%u.\n", sync_sid);
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                m_sendmsg_rsp_container[sp_tcp->GetFD()].ready = true;
-                m_sendmsg_rsp_container[sp_tcp->GetFD()].rsp_content = std::string(pdata, data_len);
+                m_sendmsg_rsp_container[sync_sid].ready = true;
+                m_sendmsg_rsp_container[sync_sid].rsp_content = std::string(pdata, data_len);
                 m_rsp_sendmsg_condition.notify_all();
-                //printf("notify all that rsp is comming.\n"); 
             }
             size -= needlen;
             readedlen += needlen;
@@ -287,8 +292,8 @@ private:
 
     void Req2Receiver_onClose(TcpSockSmartPtr sp_tcp)
     {
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
+        //core::common::locker_guard guard(m_rsp_sendmsg_lock);
+        //m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
         //printf("req2receiver tcp disconnected.\n");
 
     }
@@ -322,19 +327,25 @@ private:
     bool WriteTaskDataToReceiver(TcpSockSmartPtr sp_tcp, const Req2ReceiverTask& task, string& rsp_content)
     {
         char syncflag = 0;
+        uint32_t waiting_syncid = 0;
         if(task.sync)
         {
+            //g_log.Log(lv_debug, "begin send sync data to client:%lld\n", (int64_t)core::utility::GetTickCount());
             syncflag = 1;
             core::common::locker_guard guard(m_rsp_sendmsg_lock);
-            m_sendmsg_rsp_container[sp_tcp->GetFD()].ready = false;
-            m_sendmsg_rsp_container[sp_tcp->GetFD()].rsp_content = ""; 
+            ++sync_sessionid_;
+            waiting_syncid = sync_sessionid_;
+            m_sendmsg_rsp_container[waiting_syncid].ready = false;
+            m_sendmsg_rsp_container[waiting_syncid].rsp_content = ""; 
         }
-        uint32_t write_len = sizeof(syncflag) + sizeof(task.data_len) + task.data_len;
+        uint32_t write_len = sizeof(syncflag) + sizeof(waiting_syncid) + sizeof(task.data_len) + task.data_len;
         boost::shared_array<char> writedata(new char[write_len]);
         memcpy(writedata.get(), &syncflag, sizeof(syncflag));
-        memcpy(writedata.get() + sizeof(syncflag), (char*)&task.data_len, sizeof(task.data_len));
-        memcpy(writedata.get() + sizeof(syncflag) + sizeof(task.data_len), task.data.get(), task.data_len);
-        //printf("begin send data to client:%lld\n", (int64_t)core::utility::GetTickCount());
+        uint32_t waiting_syncid_n = htonl(waiting_syncid);
+        uint32_t data_len_n = htonl(task.data_len);
+        memcpy(writedata.get() + sizeof(syncflag), &waiting_syncid_n, sizeof(waiting_syncid_n));
+        memcpy(writedata.get() + sizeof(syncflag) + sizeof(waiting_syncid), (char*)&data_len_n, sizeof(data_len_n));
+        memcpy(writedata.get() + sizeof(syncflag) + sizeof(waiting_syncid) + sizeof(task.data_len), task.data.get(), task.data_len);
         if(!sp_tcp->SendData(writedata.get(), write_len))
         {
             printf("send msg to other client failed.\n");
@@ -345,7 +356,6 @@ private:
         bool result = true;
         if(task.sync)
         {
-            int fd = sp_tcp->GetFD();
             struct timespec ts;
             ts.tv_sec = time(NULL) + task.timeout;
             ts.tv_nsec = 0;
@@ -354,18 +364,18 @@ private:
             {
                 {
                     core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                    ready = m_sendmsg_rsp_container[fd].ready;
-                    //printf("one sync data waiter wakeup. fd:%d, ready:%d.\n", fd, ready?1:0);
+                    ready = m_sendmsg_rsp_container[waiting_syncid].ready;
+                    //printf("one sync data waiter wakeup. sid:%d, ready:%d.\n", waiting_syncid, ready?1:0);
                     if(ready)
                     {
-                        rsp_content = m_sendmsg_rsp_container[fd].rsp_content;
+                        rsp_content = m_sendmsg_rsp_container[waiting_syncid].rsp_content;
                         break;
                     }
-                    //printf("fd:%d wake up for ready.\n", sp_tcp->GetFD());
+                    //printf("sid:%d sendmsg wake up for ready.\n", waiting_syncid);
                     int retcode = m_rsp_sendmsg_condition.waittime(m_rsp_sendmsg_lock, &ts);
                     if(retcode == ETIMEDOUT)
                     {
-                        //printf(" wakeup for timeout. fd:%d.\n", fd);
+                        printf(" wakeup for timeout. sid:%d.\n", waiting_syncid);
                         //return false;
                         result = false;
                         rsp_content = "wait time out.";
@@ -374,7 +384,12 @@ private:
                 }
             }
             // close sync Tcp, remove the tcp in onClose event.
-            sp_tcp->DisAllowSend();
+            // changed: do not close for later reuse, now sync request can be seperate by sessionid 
+            // in the same tcp.
+            // sp_tcp->DisAllowSend();
+            //g_log.Log(lv_debug, "end send sync data to client:%lld\n", (int64_t)core::utility::GetTickCount());
+            core::common::locker_guard guard(m_rsp_sendmsg_lock);
+            m_sendmsg_rsp_container.erase(waiting_syncid);
         }
         return result;
     }
@@ -408,15 +423,20 @@ private:
             return false;
         }
         TcpSockSmartPtr newtcp;
-        if(task.sync)
-        {
-            // sync get data , we will create new tcp for each sync task.
-        }
-        else
-        {
-            // find dest host in event loop, if success , we reuse the tcp connect.
-            newtcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
-        }
+        // changed: do not use tcp fd to seperate different sync request, use a sync_sessionid_ instead,
+        // so we can reuse the old tcp connection.
+        //if(task.sync)
+        //{
+        //    // sync get data , we will create new tcp for each sync task.
+        //}
+        //else
+        //{
+        //    // find dest host in event loop, if success , we reuse the tcp connect.
+        //    newtcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
+        //}
+
+        // find dest host in event loop, if success , we reuse the tcp connect.
+        newtcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
         if( !newtcp )
         {
             //printf("begin connect client:%lld\n", (int64_t)core::utility::GetTickCount());
@@ -580,6 +600,7 @@ private:
     ServerConnMgr* m_server_connmgr;
     volatile bool m_req2receiver_running;
     volatile bool m_req2receiver_terminate;
+    uint32_t  sync_sessionid_;
 };
 
 DECLARE_SP_PTR(Req2ReceiverMgr);

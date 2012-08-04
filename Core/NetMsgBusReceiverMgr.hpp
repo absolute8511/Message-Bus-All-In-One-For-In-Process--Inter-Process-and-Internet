@@ -216,8 +216,11 @@ private:
         {
             char is_sync = 0;
             uint32_t data_len;
+            uint32_t sync_sid;
             size_t needlen;
             needlen = sizeof(is_sync);
+            // sync session id added for reuse tcp for sendmsg.
+            needlen += sizeof(sync_sid); 
             needlen += sizeof(data_len);
             if(size < needlen)
             {// not enough data, wait for next time
@@ -225,7 +228,9 @@ private:
             }
             is_sync = *pdata;
             pdata += sizeof(is_sync);
-            data_len = *((uint32_t*)pdata);
+            sync_sid = ntohl(*((uint32_t*)pdata));
+            pdata += sizeof(sync_sid);
+            data_len = ntohl(*((uint32_t*)pdata));
             pdata += sizeof(data_len);
 
             needlen += data_len;
@@ -237,7 +242,7 @@ private:
             // 具体的消息内容可以是JSON/XML数据格式(或者也可以是二进制数据)，具体由收发双方协定
             // 第一次连接后必须先发一个包含msgsender的消息串表明自己的身份
             std::string msgcontent(pdata, data_len);
-            //printf("got sendmsg data, syncflag:%d, content:%s, data_len:%d, string size:%ld.\n", (int)is_sync, pdata, data_len, msgcontent.size());
+            //printf("got sendmsg data, syncflag:%d, sync_sid:%u, data_len:%d, string size:%ld.\n", (int)is_sync, sync_sid, data_len, msgcontent.size());
             // 身份验证,并过滤
             std::map<int, std::string>::iterator senderit = m_client_senders.find(sp_tcp->GetFD());
             if(senderit == m_client_senders.end())
@@ -261,9 +266,9 @@ private:
             }
             if(is_sync)
             {// 对方指定了同步等待回复，那么就直接调用消息处理函数后，把数据写回
-                //printf("got a sync request on fd:%d.\n", sp_tcp->GetFD());
-                //printf("got a sync request :%lld\n", (int64_t)core::utility::GetTickCount());
-                threadpool::queue_work_task(boost::bind(NetMsgBusRspSendMsg, sp_tcp, msgcontent), 0);
+                //printf("got a sync request on session:%d.\n", sync_sid);
+                //g_log.Log(lv_debug, "got a sync request :%lld\n", (int64_t)core::utility::GetTickCount());
+                threadpool::queue_work_task(boost::bind(NetMsgBusRspSendMsg, sp_tcp, msgcontent, sync_sid), 0);
             }
             else
             {// 异步的话，直接把消息抛给本机消息总线后立即返回

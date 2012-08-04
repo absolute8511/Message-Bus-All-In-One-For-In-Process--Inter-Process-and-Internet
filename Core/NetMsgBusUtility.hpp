@@ -5,6 +5,7 @@
 #include "TcpSock.h"
 #include "NetMsgBusFilterMgr.h"
 #include "CommonUtility.hpp"
+#include "SimpleLogger.h"
 #include <string>
 #include <stdio.h>
 #include <boost/shared_array.hpp>
@@ -14,6 +15,8 @@ using namespace core::net;
 
 namespace NetMsgBus
 {
+static core::LoggerCategory g_log("NetMsgBusUtility");
+
 inline void EncodeMsgKeyValue(std::string& orig_value)
 {
     // replace % and &
@@ -116,9 +119,9 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
 }
 
 // response to the client who has send a msg using sync mode.
-inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent)
+inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent, uint32_t sync_sid)
 {
-    //printf("process a sync request :%lld\n", (int64_t)core::utility::GetTickCount());
+    //g_log.Log(core::lv_debug, "process a sync request begin :%lld\n", (int64_t)core::utility::GetTickCount());
     std::string msgid;
     if(CheckMsgId(netmsgbus_msgcontent, msgid))
     {
@@ -126,12 +129,17 @@ inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netms
         uint32_t data_len;
         if(GetMsgParam(netmsgbus_msgcontent, data, data_len))
         {
+            //g_log.Log(core::lv_debug, "process a sync request begin sendmsg:%lld\n", (int64_t)core::utility::GetTickCount());
             SendMsg(msgid, data, data_len);
-            //printf("local process the sync req finished on fd:%d, ready to send back to sender.\n", sp_tcp->GetFD());
             // when finished process, write the data back to the client.
-            sp_tcp->SendData((char*)&data_len, sizeof(data_len));
+            uint32_t sync_sid_n = htonl(sync_sid);
+            uint32_t data_len_n = htonl(data_len);
+            //g_log.Log(core::lv_debug, "process a sync request begin send tcp data:%lld\n", (int64_t)core::utility::GetTickCount());
+            //printf("local process the sync req finished on session id:%d, ready to send back to sender.\n", sync_sid_n);
+            sp_tcp->SendData((char*)&sync_sid_n, sizeof(sync_sid_n));
+            sp_tcp->SendData((char*)&data_len_n, sizeof(data_len_n));
             sp_tcp->SendData(data.get(), data_len);
-            //printf("process a sync request finished :%lld\n", (int64_t)core::utility::GetTickCount());
+            //g_log.Log(core::lv_debug, "process a sync request finished :%lld\n", (int64_t)core::utility::GetTickCount());
         }
     }
 }
