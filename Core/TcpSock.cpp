@@ -475,7 +475,7 @@ bool TcpSock::Connect(const std::string ip, unsigned short int port, struct time
         {
             m_errno = errno;
             g_log.Log(lv_error, "connect to other client error. fd:%d, %s:%d", m_fd, ip.c_str(), port);
-            assert(false);
+            //assert(false);
             return false;
         }
     }

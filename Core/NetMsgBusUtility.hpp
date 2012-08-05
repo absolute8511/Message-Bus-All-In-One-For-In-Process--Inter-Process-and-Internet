@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <boost/shared_array.hpp>
 #include <fcntl.h>
+#include <arpa/inet.h>
 
 using namespace core::net;
 
