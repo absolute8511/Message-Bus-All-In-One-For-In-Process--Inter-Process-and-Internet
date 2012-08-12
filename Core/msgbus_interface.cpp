@@ -10,6 +10,7 @@
 #include <list>
 #include <boost/bind.hpp>
 #include <map>
+#include <boost/unordered_map.hpp>
 #include <deque>
 #include <stdio.h>
 #include <errno.h>
@@ -42,7 +43,8 @@ void* MsgTaskProcessProc(void*);
 typedef std::list<MsgHandlerWeakRef> MsgHandlerWeakObjList;
 typedef std::list<MsgHandlerStrongRef> MsgHandlerStrongObjList;
 // 所有消息的处理对象总集合类型
-typedef std::map< std::string, MsgHandlerWeakObjList > MsgHandlerObjContainerT;
+//typedef std::map< std::string, MsgHandlerWeakObjList > MsgHandlerObjContainerT;
+typedef boost::unordered_map< std::string, MsgHandlerWeakObjList > MsgHandlerObjContainerT;
 static MsgHandlerObjContainerT s_all_msghandler_objs;
 
 // 用于向消息总线添加消息的结构
