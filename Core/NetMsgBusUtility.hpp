@@ -137,9 +137,12 @@ inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netms
             uint32_t data_len_n = htonl(data_len);
             //g_log.Log(core::lv_debug, "process a sync request begin send tcp data:%lld\n", (int64_t)core::utility::GetTickCount());
             //printf("local process the sync req finished on session id:%d, ready to send back to sender.\n", sync_sid_n);
-            sp_tcp->SendData((char*)&sync_sid_n, sizeof(sync_sid_n));
-            sp_tcp->SendData((char*)&data_len_n, sizeof(data_len_n));
-            sp_tcp->SendData(data.get(), data_len);
+            uint32_t write_len = sizeof(sync_sid_n) + sizeof(data_len_n) + data_len;
+            char* writedata = new char[write_len];
+            memcpy(writedata, &sync_sid_n, sizeof(sync_sid_n));
+            memcpy(writedata + sizeof(sync_sid_n), (char*)&data_len_n, sizeof(data_len_n));
+            memcpy(writedata + sizeof(sync_sid_n) + sizeof(data_len_n), data.get(), data_len);
+            sp_tcp->SendData(writedata, write_len);
             //g_log.Log(core::lv_debug, "process a sync request finished :%lld\n", (int64_t)core::utility::GetTickCount());
         }
     }
