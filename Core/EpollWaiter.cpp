@@ -127,7 +127,7 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
     }
     if(retfds < 0)
     {
-        g_log.Log(lv_error, "error happened while epoll wait");
+        g_log.Log(lv_debug, "error happened while epoll wait");
         return retfds;
     }
     //if(retfds == 0 && writetimeout_detect)

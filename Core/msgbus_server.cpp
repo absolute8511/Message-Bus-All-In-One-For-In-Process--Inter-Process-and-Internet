@@ -334,7 +334,7 @@ void* msgbus_server_accept_thread( void* param )
         }
     }
     close(server_sockfd);
-    EventLoopPool::TerminateLoop("server_accept_loop");
+    //EventLoopPool::TerminateLoop("server_accept_loop");
     s_netmsgbus_server_running = false;
     return 0;
 }

@@ -166,7 +166,7 @@ void* EventLoop::Loop(void* param)
 
         if(retcode == -1)
         {
-            g_log.Log(lv_error, "event loop select error.");
+            g_log.Log(lv_debug, "event loop select error.");
             if(el->m_terminal)
                 break;
             continue;
