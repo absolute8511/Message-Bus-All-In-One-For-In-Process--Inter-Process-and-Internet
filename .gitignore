@@ -1,0 +1,7 @@
+*.so
+*.o
+*.dSYM
+*.DS_Store
+*.log
+*.zip
+*.d
