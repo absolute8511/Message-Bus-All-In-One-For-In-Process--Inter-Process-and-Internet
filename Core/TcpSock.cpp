@@ -239,6 +239,7 @@ void TcpSock::SendDataInLoop(const std::string& data)
 
 void TcpSock::SendDataInLoop(const char* pdata, size_t size)
 {
+    assert(m_evloop->IsInLoopThread());
     if(IsClosed() || !Writeable())
     {
         m_errno = EPIPE;
@@ -263,12 +264,14 @@ bool TcpSock::SendData(const char* pdata, size_t size)
                 m_errno = EPIPE;
                 return false;
             }
-            if( (m_outbuf.size() + size) > MAX_BUF_SIZE )
+#ifndef NDEBUG
+            if( size > MAX_BUF_SIZE )
             {
                 m_errno = 0;
                 g_log.Log(lv_warn, "buffer overflow , please slow down send.");
                 return false;
             }
+#endif
             if(!m_evloop->IsInLoopThread())
             {
                 m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::SendDataInLoop, shared_from_this(),
