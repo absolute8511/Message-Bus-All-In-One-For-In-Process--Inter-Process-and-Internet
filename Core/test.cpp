@@ -79,8 +79,7 @@ void init_signals_env()
 }
 
 
-void testSyncGetData(const std::string& clientname, const std::string& msgid,
-    MsgBusParam param, int32_t timeout_sec);
+void testSyncGetData();
 
 void GenerateNextTestParam(MsgBusParam& param, const string& longtestdata)
 {
@@ -134,7 +133,7 @@ public:
     }
     bool testMsgBus3(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
-        printMsg(msgid, param, __FUNCTION__);
+        //printMsg(msgid, param, __FUNCTION__);
         std::string rspstr("Yeah! I send the rsp data to you.");
         param = CustomType2Param(rspstr);
         //sleep(3);
@@ -387,8 +386,8 @@ void testremotemsgbus()
 
     NetMsgBusQueryServices("");
 
-    bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
-    assert(ret);
+    //bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
+    //assert(ret);
 
     MyMsgHandlerClassPtr thandlerobj;
     MsgHandlerMgr::GetInstance(thandlerobj);
@@ -429,8 +428,8 @@ void testremotemsgbus()
     }
     else if(inputflag == 's')
     {
-        thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0);
-        thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
+        //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0);
+        //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
         unsigned short suggest_port = 0;
         if( 0 != NetMsgBusRegReceiver("test.onlyformsgbus_server_conn", "", suggest_port))
         {
@@ -441,7 +440,7 @@ void testremotemsgbus()
         core::XParam xp;
         xp.put_Int("testkey", 100);
         string longdata;
-        for(int i = 0; i < 10000; i++)
+        for(int i = 0; i < 80; i++)
         {
             longdata.push_back(char(i%180 + 32));
         }
@@ -452,7 +451,14 @@ void testremotemsgbus()
         
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
-        int mintimeout = 1;
+        int mintimeout = 10;
+
+        threadpool::task_type t = boost::bind(testSyncGetData);
+        for(int cocurrent = 0; cocurrent < 10; ++cocurrent)
+        {
+            threadpool::queue_work_task(t, 1);
+        }
+        printf(" in main start\n ");
         int64_t starttime = utility::GetTickCount();
         while(true)
         {
@@ -467,35 +473,36 @@ void testremotemsgbus()
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
-            GenerateNextTestParam(param, longdata);
+            //GenerateNextTestParam(param, longdata);
             // 测试群组消息，通过服务器可以发送群组消息
-            NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             GenerateNextTestParam(param);
             // 测试向指定的接收者发送消息
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             
             sendcounter++;
-            //if(sendcounter % 100 == 0)
-            //{
-            printf("{%d}\n ", sendcounter);
-            if(sendcounter >= 30)
-                break;
-            //}
-            
+            if(sendcounter % 100 == 0)
+            {
+                printf(" in main {%d}\n ", sendcounter);
+                if(sendcounter >= 1000)
+                    break;
+                sleep(125);
+            }
+
             GenerateNextTestParam(param);
             NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            GenerateNextTestParam(param, longdata);
-            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+            //GenerateNextTestParam(param, longdata);
+            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-            GenerateNextTestParam(param);
-            NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+            //GenerateNextTestParam(param);
+            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             
 
-            GenerateNextTestParam(param);
+            //GenerateNextTestParam(param);
             std::string rsp_content;
             //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
             bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
@@ -508,6 +515,7 @@ void testremotemsgbus()
                 //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
                 //if(mintimeout > 1)
                   //  --mintimeout;
+                //sleep(3);
             }
             else
             {
@@ -515,18 +523,11 @@ void testremotemsgbus()
                 //++mintimeout;
             }
             
-            threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
-                    "msg_netmsgbus_testgetdata", param, 1), 0);
         }
         printf("\n");
-        core::XParam xp2;
-        Param2CustomType(param, xp2);
-        int value = 0;
-        xp2.get_Int("testkey", value);
-        printf("total %d msgs sended. last param:%d.\n", sendcounter, value);
         int64_t endtime = utility::GetTickCount();
-        printf("%d msgs used time:%lld\n", sendcounter, endtime - starttime);
-        g_log.Log(lv_debug, "%d msgs used time:%lld\n", sendcounter, endtime - starttime);
+        printf("%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, (starttime,endtime));
+        //
     }
 
     while(true)
@@ -538,19 +539,44 @@ void testremotemsgbus()
     NetMsgBusDisConnect();
 }
 
-void testSyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, int32_t timeout_sec)
+void testSyncGetData()
 {
-    std::string rsp;
-    bool success = NetMsgBusGetData(clientname, msgid, param, rsp, timeout_sec);
-    if(success)
+    core::XParam xp;
+    xp.put_Int("testkey", 100);
+    string longdata;
+    for(int i = 0; i < 80; i++)
     {
-        //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp.c_str());
-        ;
+        longdata.push_back(char(i%180 + 32));
     }
-    else
+    xp.put_Str("testlongdata", longdata);
+    MsgBusParam param = CustomType2Param(xp);
+    int cnt = 0;
+    printf("in thread start\n");
+    int64_t starttime = utility::GetTickCount();
+    while(true)
     {
-        g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu. errmsg:%s\n", timeout_sec, (uint64_t)pthread_self(), rsp.c_str());
+        if(s_break)
+            break;
+        ++cnt;
+        std::string rsp;
+        bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",param, rsp, 10);
+        if(success)
+        {
+            if(cnt % 1000 == 0)
+            {
+                printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
+                sleep(125);
+            }
+            if(cnt > 10000)
+                break;
+        }
+        else
+        {
+            g_log.Log(lv_warn, "timeout() err get net data in thread:%llu. errmsg:%s\n", (uint64_t)pthread_self(), rsp.c_str());
+        }
     }
+    int64_t endtime = utility::GetTickCount();
+    printf("get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
 }
 
 void testXParam()
@@ -628,11 +654,11 @@ void testXParam()
     assert(uintres == 3000000000);
     xp2.get_UInt("k7", uintres);
     assert(uintres == 30);
-    unsigned long long int longres;
+    uint64_t longres;
     xp2.get_ULongLong("k8", longres);
     assert(longres == 9999999999999999);
     xp2.get_ULongLong("k9", longres);
-    assert((unsigned long long)longres == 0xffffffffffffffff);
+    assert((uint64_t)longres == 0xffffffffffffffff);
     string chararrayres;
     xp2.get_CharArray("k12", chararrayres);
     assert(chararray == chararrayres);
