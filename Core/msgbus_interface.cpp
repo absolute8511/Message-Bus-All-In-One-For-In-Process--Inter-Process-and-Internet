@@ -489,10 +489,10 @@ void NetMsgBusDisConnect()
 {
     destroy_netmsgbus_client();
 }
-void NetMsgBusDisConnectFromClient(const std::string& name)
-{
-    msgbus_disconnect_receiver(name);
-}
+//void NetMsgBusDisConnectFromClient(const std::string& name)
+//{
+//    msgbus_disconnect_receiver(name);
+//}
 
 bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid,
    MsgBusParam param, kMsgSendType sendtype)

@@ -11,6 +11,7 @@
 #include "SelectWaiter.h"
 #include "TcpSock.h"
 #include "SimpleLogger.h"
+#include "TcpClientPool.h"
 #include <errno.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -18,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <map>
+#include <boost/unordered_map.hpp>
 #include <string>
 #include <netinet/in.h>
 #include <time.h>
@@ -32,6 +34,8 @@ using namespace core::net;
 #define TIMEOUT_SHORT 5
 #define TIMEOUT_LONG  15
 #define MAX_SENDMSG_CLIENT_NUM  1024
+#define CLIENT_POOL_SIZE  10
+
 namespace NetMsgBus
 {
 
@@ -93,28 +97,24 @@ public:
         m_server_connmgr = pmgr;
     }
 
-    void DisConnectFromClient(const std::string& name)
-    {
-        LocalHostInfo destclient;
-        bool cache_exist = safe_get_cached_host_info(name, destclient);
-        if(!cache_exist)
-        {
-            return;
-        }
-        if(EventLoopPool::GetEventLoop("postmsg_event_loop"))
-        {
-            boost::shared_ptr<SockWaiterBase> ev_waiter = EventLoopPool::GetEventLoop("postmsg_event_loop")->GetEventWaiter();
-            if(ev_waiter)
-            {
-                // find dest host in event loop, if success , we reuse the tcp connect.
-                TcpSockSmartPtr sptcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
-                if(sptcp)
-                {
-                    sptcp->DisAllowSend();
-                }
-            }
-        }
-    }
+    //void DisConnectFromClient(const std::string& name)
+    //{
+    //    LocalHostInfo destclient;
+    //    bool cache_exist = safe_get_cached_host_info(name, destclient);
+    //    if(!cache_exist)
+    //    {
+    //        return;
+    //    }
+    //    if(EventLoopPool::GetEventLoop("postmsg_event_loop"))
+    //    {
+    //        // find dest host in event loop, if success , we reuse the tcp connect.
+    //        TcpSockSmartPtr sptcp = m_postmsg_client_conn_pool.GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
+    //        if(sptcp)
+    //        {
+    //            sptcp->DisAllowSend();
+    //        }
+    //    }
+    //}
 
     bool SendMsgDirectToClient(const std::string& clientname, uint32_t data_len, 
         boost::shared_array<char> data, string& rsp_content, int32_t timeout)
@@ -295,6 +295,8 @@ private:
         //core::common::locker_guard guard(m_rsp_sendmsg_lock);
         //m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
         //printf("req2receiver tcp disconnected.\n");
+        m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
+        m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
 
     }
     void Req2Receiver_onError(TcpSockSmartPtr sp_tcp)
@@ -302,6 +304,8 @@ private:
         perror("sendmsg_error ");
         // you can notify the high level to handle the error, retry or just ignore.
         printf("client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
+        m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
+        m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
     }
     bool IdentiySelfToReceiver(TcpSockSmartPtr sp_tcp)
     {
@@ -423,31 +427,38 @@ private:
             return false;
         }
         TcpSockSmartPtr newtcp;
+
+        TcpClientPool* pclient_conn_pool = &m_postmsg_client_conn_pool;
         // changed: do not use tcp fd to seperate different sync request, use a sync_sessionid_ instead,
         // so we can reuse the old tcp connection.
-        //if(task.sync)
-        //{
-        //    // sync get data , we will create new tcp for each sync task.
-        //}
-        //else
-        //{
-        //    // find dest host in event loop, if success , we reuse the tcp connect.
-        //    newtcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
-        //}
-
-        // find dest host in event loop, if success , we reuse the tcp connect.
-        newtcp = ev_waiter->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
+        if(task.sync)
+        {
+            pclient_conn_pool = &m_sendmsg_client_conn_pool;
+        }
+        newtcp = pclient_conn_pool->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
         if( !newtcp )
         {
-            //printf("begin connect client:%lld\n", (int64_t)core::utility::GetTickCount());
-            //printf("begin connect client: %s,%u. \n", task.clientname.c_str(), destclient.host_port);
-            struct timeval tv;
-            tv.tv_sec = task.timeout;
-            tv.tv_usec = 0;
-            newtcp.reset(new TcpSock());
-            // 连接指定客户端并发送数据 
-            bool connected = newtcp->Connect(destclient.host_ip, destclient.host_port, tv);
-            if ( !connected )
+            SockHandler callback;
+            if(task.sync)
+            {
+                // sync sendmsg need a onRead callback to get the sync rsp data.
+                callback.onRead = boost::bind(&Req2ReceiverMgr::Req2Receiver_onRead, this, _1, _2, _3);
+            }
+            else
+            {
+                // do not need the onRead event.
+                callback.onRead = NULL;
+            }
+            callback.onSend = boost::bind(&Req2ReceiverMgr::Req2Receiver_onSend, this, _1);
+            callback.onClose = boost::bind(&Req2ReceiverMgr::Req2Receiver_onClose, this, _1);
+            callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
+
+            // first identify me to the receiver.
+            //IdentiySelfToReceiver(newtcp);
+            bool ret;
+            ret = pclient_conn_pool->CreateTcpSock(*(ev_waiter.get()), destclient.host_ip, destclient.host_port, CLIENT_POOL_SIZE, 
+                task.timeout, callback, boost::bind(&Req2ReceiverMgr::IdentiySelfToReceiver, this, _1));
+            if(!ret)
             {
                 // 连接失败很可能是缓存的信息已经失效，因此我们把它加到等待列表中，并向服务器请求新的信息
                 if(task.retry)
@@ -465,28 +476,9 @@ private:
                 rsp_content = "error connect to receiver client.";
                 return false;
             }
-            newtcp->SetNonBlock();
-            newtcp->SetCloseAfterExec();
-            SockHandler callback;
-            if(task.sync)
-            {
-                // sync sendmsg need a onRead callback to get the sync rsp data.
-                callback.onRead = boost::bind(&Req2ReceiverMgr::Req2Receiver_onRead, this, _1, _2, _3);
-            }
-            else
-            {
-                // do not need the onRead event.
-                callback.onRead = NULL;
-            }
-            callback.onSend = boost::bind(&Req2ReceiverMgr::Req2Receiver_onSend, this, _1);
-            callback.onClose = boost::bind(&Req2ReceiverMgr::Req2Receiver_onClose, this, _1);
-            callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
-            newtcp->SetSockHandler(callback);
-
-            ev_waiter->AddTcpSock(newtcp);
-            
-            // first identify me to the receiver.
-            IdentiySelfToReceiver(newtcp);
+            newtcp = pclient_conn_pool->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
+            if(!newtcp)
+                return false;
         }
         if(WriteTaskDataToReceiver(newtcp, task, rsp_content))
         {
@@ -579,8 +571,8 @@ private:
     core::common::condition m_reqtoreceiver_cond;
     core::common::locker    m_reqtoreceiver_locker;
 
-    typedef std::map< std::string, LocalHostInfo > LocalHostContainerT;
-    typedef std::map< std::string, Req2ReceiverTaskContainerT > WaitingReq2ReceiverTaskT;
+    typedef boost::unordered_map< std::string, LocalHostInfo > LocalHostContainerT;
+    typedef boost::unordered_map< std::string, Req2ReceiverTaskContainerT > WaitingReq2ReceiverTaskT;
     // 一些等待客户端IP信息返回的任务队列，GetClient返回后一起发出去
     WaitingReq2ReceiverTaskT m_wait2send_task_container;
     LocalHostContainerT m_cached_client_info;
@@ -601,6 +593,8 @@ private:
     volatile bool m_req2receiver_running;
     volatile bool m_req2receiver_terminate;
     uint32_t  sync_sessionid_;
+    TcpClientPool  m_sendmsg_client_conn_pool;
+    TcpClientPool  m_postmsg_client_conn_pool;
 };
 
 DECLARE_SP_PTR(Req2ReceiverMgr);

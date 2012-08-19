@@ -28,7 +28,7 @@ bool msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t dat
 // 本函数默认超时时间为30s,返回的数据在rsp_content 中
 bool msgbus_sendmsg_direct_to_client(const std::string& clientname, uint32_t data_len, 
     boost::shared_array<char> data, std::string& rsp_content, int32_t timeout_sec = 30);
-void msgbus_disconnect_receiver(const std::string& name);
+//void msgbus_disconnect_receiver(const std::string& name);
 
 bool msgbus_query_available_services(const std::string& match_str);
 

@@ -10,6 +10,7 @@ namespace core { namespace net {
 
 //typedef std::deque< TcpSockSmartPtr > TcpSockContainerT;
 typedef std::map< long, TcpSockSmartPtr > TcpSockContainerT;
+typedef std::map< std::pair<std::string, unsigned short int>, TcpSockContainerT > TcpSockPoolT;  
 
 enum kSockActiveNotify
 {
@@ -26,7 +27,6 @@ class SockWaiterBase
 public:
     SockWaiterBase();
     virtual ~SockWaiterBase();
-    TcpSockSmartPtr GetTcpSockByDestHost(const std::string& ip, unsigned short int port);
     // 主动关闭时只关闭写端,等待对方close的FIN包返回后本端再close
     void DisAllowAllTcpSend();
 
@@ -56,6 +56,8 @@ protected:
     void NotifyNewActiveWithoutLock(kSockActiveNotify active);
 
     TcpSockContainerT  m_waiting_tcpsocks;
+    // store all the tcp connection for the specified destip:destport.
+    TcpSockPoolT       m_tcpclient_pool;
     core::common::locker m_common_lock;
     int  m_notify_pipe[2];
     bool m_newnotify;

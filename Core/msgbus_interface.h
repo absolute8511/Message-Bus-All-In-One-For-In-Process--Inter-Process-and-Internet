@@ -126,7 +126,7 @@ namespace NetMsgBus
     // 
     bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid, MsgBusParam param, kMsgSendType sendtype);
     // if you have no more data to send, then you can disconnect from the receiver. 
-    void NetMsgBusDisConnectFromClient(const std::string& name);
+    //void NetMsgBusDisConnectFromClient(const std::string& name);
     // get the ip and port info and cache them in client. just work like dns name resolve.
     bool NetMsgBusQueryHostInfo(const std::string& clientname);
     // send messages to a client and wait response data from it.

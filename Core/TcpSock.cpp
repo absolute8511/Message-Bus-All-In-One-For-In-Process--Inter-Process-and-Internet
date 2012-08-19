@@ -239,7 +239,8 @@ void TcpSock::SendDataInLoop(const std::string& data)
 
 void TcpSock::SendDataInLoop(const char* pdata, size_t size)
 {
-    assert(m_evloop->IsInLoopThread());
+    if(m_evloop)
+        assert(m_evloop->IsInLoopThread());
     if(IsClosed() || !Writeable())
     {
         m_errno = EPIPE;

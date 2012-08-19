@@ -83,11 +83,11 @@ bool msgbus_query_available_services(const std::string& match_str)
     return s_server_connmgr.QueryAvailableServices(match_str);
 }
 
-void msgbus_disconnect_receiver(const std::string& name)
-{
-    if(sp_req2receiver_mgr)
-        sp_req2receiver_mgr->DisConnectFromClient(name);
-}
+//void msgbus_disconnect_receiver(const std::string& name)
+//{
+//    if(sp_req2receiver_mgr)
+//        sp_req2receiver_mgr->DisConnectFromClient(name);
+//}
 
 bool init_netmsgbus_client(const std::string& serverip, unsigned short int serverport)
 {

@@ -3,6 +3,7 @@
 
 #include "msgbus_interface.h"
 #include "TcpSock.h"
+#include "SockWaiterBase.h"
 #include "NetMsgBusFilterMgr.h"
 #include "CommonUtility.hpp"
 #include "SimpleLogger.h"
@@ -161,5 +162,6 @@ inline void NetMsgBusToLocalMsgBus(const std::string& netmsgbus_msgcontent)
         }
     }
 }
+
 }
 #endif // end of NETMSGBUS_UTILITY_H

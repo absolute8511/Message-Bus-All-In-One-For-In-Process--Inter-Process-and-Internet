@@ -7,6 +7,7 @@
 #include "msgbus_interface.h"
 #include "lock.hpp"
 #include <map>
+#include <boost/unordered_map.hpp>
 #include <string>
 #include <boost/bind.hpp>
 #include <boost/shared_array.hpp>
@@ -44,7 +45,8 @@ namespace NetMsgBus
             HandlerT handler_func;
         };
         // 消息处理函数集合类型
-        typedef typename std::map< std::string, HandlerTWrapper > HandlerContainerT;
+        //typedef typename std::map< std::string, HandlerTWrapper > HandlerContainerT;
+        typedef typename boost::unordered_map< std::string, HandlerTWrapper > HandlerContainerT;
 
         // 删除该对象在消息总线上注册的所有函数
         virtual ~MsgHandler()
