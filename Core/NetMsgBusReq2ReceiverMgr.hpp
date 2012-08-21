@@ -34,7 +34,7 @@ using namespace core::net;
 #define TIMEOUT_SHORT 5
 #define TIMEOUT_LONG  15
 #define MAX_SENDMSG_CLIENT_NUM  1024
-#define CLIENT_POOL_SIZE  10
+#define CLIENT_POOL_SIZE  25
 
 namespace NetMsgBus
 {
@@ -130,7 +130,7 @@ public:
         task.retry = false;
         task.timeout = timeout;
         // sync sendmsg will not retry to update client info if failed to send message.
-        return ProcessReqToReceiver(EventLoopPool::GetEventLoop("sendmsg_event_loop")->GetEventWaiter(), task, rsp_content);
+        return ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase>(), task, rsp_content);
     }
 
     bool PostMsgDirectToClient(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
@@ -160,8 +160,8 @@ public:
             m_req2receiver_tid = 0;
             return false;
         }
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        EventLoopPool::CreateEventLoop("sendmsg_event_loop", spwaiter);
+        //boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
+        //EventLoopPool::CreateEventLoop("sendmsg_event_loop", spwaiter);
         AddHandler("netmsgbus.server.getclient", &Req2ReceiverMgr::HandleRspGetClient, 0);
         while(!m_req2receiver_running)
         {
@@ -183,7 +183,7 @@ public:
         }
         RemoveAllHandlers();
         EventLoopPool::TerminateLoop("postmsg_event_loop");
-        EventLoopPool::TerminateLoop("sendmsg_event_loop");
+        //EventLoopPool::TerminateLoop("sendmsg_event_loop");
     }
 
 private:
@@ -273,6 +273,7 @@ private:
                 return readedlen;
             {
                 //printf("one sync data returned. sid:%u.\n", sync_sid);
+                //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), sync_sid);
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
                 m_sendmsg_rsp_container[sync_sid].ready = true;
                 m_sendmsg_rsp_container[sync_sid].rsp_content = std::string(pdata, data_len);
@@ -334,11 +335,11 @@ private:
         uint32_t waiting_syncid = 0;
         if(task.sync)
         {
-            //g_log.Log(lv_debug, "begin send sync data to client:%lld\n", (int64_t)core::utility::GetTickCount());
             syncflag = 1;
             core::common::locker_guard guard(m_rsp_sendmsg_lock);
             ++sync_sessionid_;
             waiting_syncid = sync_sessionid_;
+            //g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d\n", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
             m_sendmsg_rsp_container[waiting_syncid].ready = false;
             m_sendmsg_rsp_container[waiting_syncid].rsp_content = ""; 
         }
@@ -391,7 +392,7 @@ private:
             // changed: do not close for later reuse, now sync request can be seperate by sessionid 
             // in the same tcp.
             // sp_tcp->DisAllowSend();
-            //g_log.Log(lv_debug, "end send sync data to client:%lld\n", (int64_t)core::utility::GetTickCount());
+            //g_log.Log(lv_debug, "end send sync data to client:%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), waiting_syncid);
             core::common::locker_guard guard(m_rsp_sendmsg_lock);
             m_sendmsg_rsp_container.erase(waiting_syncid);
         }
@@ -421,11 +422,6 @@ private:
             rsp_content = "error send data to client, no cached client info.";
             return false;
         }
-        if(ev_waiter == NULL)
-        {
-            printf("error: NULL event waiter.\n");
-            return false;
-        }
         TcpSockSmartPtr newtcp;
 
         TcpClientPool* pclient_conn_pool = &m_postmsg_client_conn_pool;
@@ -453,10 +449,14 @@ private:
             callback.onClose = boost::bind(&Req2ReceiverMgr::Req2Receiver_onClose, this, _1);
             callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
 
+            if(ev_waiter == NULL)
+            {
+                g_log.Log(lv_info, "NULL event waiter. use the inner eventloop in the pool\n");
+            }
             // first identify me to the receiver.
             //IdentiySelfToReceiver(newtcp);
             bool ret;
-            ret = pclient_conn_pool->CreateTcpSock(*(ev_waiter.get()), destclient.host_ip, destclient.host_port, CLIENT_POOL_SIZE, 
+            ret = pclient_conn_pool->CreateTcpSock(ev_waiter.get(), destclient.host_ip, destclient.host_port, CLIENT_POOL_SIZE, 
                 task.timeout, callback, boost::bind(&Req2ReceiverMgr::IdentiySelfToReceiver, this, _1));
             if(!ret)
             {
@@ -527,10 +527,9 @@ private:
                 rtask = req2recv_mgr->m_reqtoreceiver_task_container.front();
                 req2recv_mgr->m_reqtoreceiver_task_container.pop_front();
             }
-            //threadpool::queue_work_task(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, spwaiter, rtask), 0);
             // in order to make sure the order of sendmsg , we should use the same thread to process the same client name sendmsg.
             threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, spwaiter, rtask),
-                "ProcessReqToReceiver" + rtask.clientname);
+                "ProcessReqToReceiver" + rtask.clientname.substr(rtask.clientname.size() - 2));
         }
         req2recv_mgr->m_req2receiver_running = false;
         return 0;

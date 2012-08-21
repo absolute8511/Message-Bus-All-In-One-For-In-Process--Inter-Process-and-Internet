@@ -123,7 +123,7 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
 // response to the client who has send a msg using sync mode.
 inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent, uint32_t sync_sid)
 {
-    //g_log.Log(core::lv_debug, "process a sync request begin :%lld\n", (int64_t)core::utility::GetTickCount());
+    //g_log.Log(core::lv_debug, "process a sync request begin :%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), sync_sid);
     std::string msgid;
     if(CheckMsgId(netmsgbus_msgcontent, msgid))
     {
@@ -131,20 +131,17 @@ inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netms
         uint32_t data_len;
         if(GetMsgParam(netmsgbus_msgcontent, data, data_len))
         {
-            //g_log.Log(core::lv_debug, "process a sync request begin sendmsg:%lld\n", (int64_t)core::utility::GetTickCount());
             SendMsg(msgid, data, data_len);
             // when finished process, write the data back to the client.
             uint32_t sync_sid_n = htonl(sync_sid);
             uint32_t data_len_n = htonl(data_len);
-            //g_log.Log(core::lv_debug, "process a sync request begin send tcp data:%lld\n", (int64_t)core::utility::GetTickCount());
-            //printf("local process the sync req finished on session id:%d, ready to send back to sender.\n", sync_sid_n);
             uint32_t write_len = sizeof(sync_sid_n) + sizeof(data_len_n) + data_len;
             char* writedata = new char[write_len];
             memcpy(writedata, &sync_sid_n, sizeof(sync_sid_n));
             memcpy(writedata + sizeof(sync_sid_n), (char*)&data_len_n, sizeof(data_len_n));
             memcpy(writedata + sizeof(sync_sid_n) + sizeof(data_len_n), data.get(), data_len);
             sp_tcp->SendData(writedata, write_len);
-            //g_log.Log(core::lv_debug, "process a sync request finished :%lld\n", (int64_t)core::utility::GetTickCount());
+            //g_log.Log(core::lv_debug, "process a sync request finished :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
         }
     }
 }

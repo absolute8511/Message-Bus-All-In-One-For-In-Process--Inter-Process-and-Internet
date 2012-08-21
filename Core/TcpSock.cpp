@@ -390,7 +390,7 @@ void TcpSock::HandleEvent()
             int writed = write(m_fd, m_outbuf.data(), m_outbuf.size());
             if(writed > 0)
             {
-                //g_log.Log(lv_debug, "write on fd:%d. bytes:%d", m_fd, writed);
+                //g_log.Log(lv_debug, "thread:%lu, write on fd:%d. bytes:%d, t:%lld",(unsigned long)pthread_self(), m_fd, writed, (int64_t)core::utility::GetTickCount());
                 m_outbuf.pop_front(writed);
                 if(m_outbuf.empty())
                 {

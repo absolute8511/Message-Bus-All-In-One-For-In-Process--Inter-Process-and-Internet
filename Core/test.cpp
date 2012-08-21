@@ -451,10 +451,10 @@ void testremotemsgbus()
         
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
-        int mintimeout = 10;
+        int mintimeout = 3;
 
         threadpool::task_type t = boost::bind(testSyncGetData);
-        for(int cocurrent = 0; cocurrent < 10; ++cocurrent)
+        for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
         {
             threadpool::queue_work_task(t, 1);
         }
@@ -464,9 +464,9 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            GenerateNextTestParam(param, longdata);
+            //GenerateNextTestParam(param, longdata);
             // 测试广播消息
-            NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            //NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
 
             //GenerateNextTestParam(param);
             // 测试群组消息, 通过客户端直接发送预期失败
@@ -477,10 +477,10 @@ void testremotemsgbus()
             // 测试群组消息，通过服务器可以发送群组消息
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            GenerateNextTestParam(param);
+            //GenerateNextTestParam(param);
             // 测试向指定的接收者发送消息
-            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
             
             sendcounter++;
             if(sendcounter % 100 == 0)
@@ -488,11 +488,10 @@ void testremotemsgbus()
                 printf(" in main {%d}\n ", sendcounter);
                 if(sendcounter >= 1000)
                     break;
-                sleep(125);
             }
 
-            GenerateNextTestParam(param);
-            NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+            //GenerateNextTestParam(param);
+            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
             //GenerateNextTestParam(param, longdata);
             //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
@@ -503,13 +502,13 @@ void testremotemsgbus()
             
 
             //GenerateNextTestParam(param);
-            std::string rsp_content;
+            //std::string rsp_content;
             //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
-            bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
-                param, rsp_content, mintimeout);
+            //bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
+            //    param, rsp_content, mintimeout);
             //threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
             //        "msg_netmsgbus_testgetdata", param, 15), 0);
-            if(success)
+            //if(success)
             {
                 //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
                 //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
@@ -517,16 +516,16 @@ void testremotemsgbus()
                   //  --mintimeout;
                 //sleep(3);
             }
-            else
+            //else
             {
-                g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu.errmsg:%s\n", mintimeout, (uint64_t)pthread_self(),rsp_content.c_str());
+                //g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu.errmsg:%s\n", mintimeout, (uint64_t)pthread_self(),rsp_content.c_str());
                 //++mintimeout;
             }
             
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
-        printf("%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, (starttime,endtime));
+        g_log.Log(lv_debug, "%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, (starttime,endtime));
         //
     }
 
@@ -559,24 +558,24 @@ void testSyncGetData()
             break;
         ++cnt;
         std::string rsp;
-        bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",param, rsp, 10);
+        bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",param, rsp, 2);
         if(success)
         {
-            if(cnt % 1000 == 0)
+            if(cnt % 500 == 0)
             {
                 printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
-                sleep(125);
             }
-            if(cnt > 10000)
+            if(cnt > 5000)
                 break;
         }
         else
         {
             g_log.Log(lv_warn, "timeout() err get net data in thread:%llu. errmsg:%s\n", (uint64_t)pthread_self(), rsp.c_str());
+            exit(-1);
         }
     }
     int64_t endtime = utility::GetTickCount();
-    printf("get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
+    g_log.Log(lv_warn, "get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
 }
 
 void testXParam()
@@ -763,7 +762,7 @@ int main()
     //init_signals_env();
     using namespace core;
     //SimpleLogger::Instance().Init("/Users/absolute/workspace/aliwwforlinux/Bin/testlog.log", lv_debug);
-    SimpleLogger::Instance().Init("./testlog.log", lv_debug);
+    SimpleLogger::Instance().Init("./testlog.log", lv_warn);
     threadpool::init_thread_pool();
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);

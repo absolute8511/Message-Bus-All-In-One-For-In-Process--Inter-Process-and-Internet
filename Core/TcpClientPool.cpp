@@ -1,5 +1,6 @@
 #include "TcpClientPool.h"
 #include "SimpleLogger.h"
+#include "EventLoopPool.h"
 #include <pthread.h>
 #include <boost/shared_ptr.hpp>
 #include <vector>
@@ -89,7 +90,7 @@ void TcpClientPool::RemoveTcpSock(TcpSockSmartPtr sp_tcp)
     }
 }
 
-bool TcpClientPool::CreateTcpSock(SockWaiterBase& waiter, const std::string& ip, unsigned short int port,
+bool TcpClientPool::CreateTcpSock(SockWaiterBase* waiter, const std::string& ip, unsigned short int port,
     int num, int timeout, SockHandler tcp_callback, PostCB postcb)
 {
     common::locker_guard g(m_common_lock);
@@ -119,7 +120,14 @@ bool TcpClientPool::CreateTcpSock(SockWaiterBase& waiter, const std::string& ip,
         newtcp->SetCloseAfterExec();
         newtcp->SetSockHandler(tcp_callback);
 
-        waiter.AddTcpSock(newtcp);
+	if(waiter)
+	{
+	    waiter->AddTcpSock(newtcp);
+	}
+	else
+	{
+	    EventLoopPool::AddTcpSockToInnerLoop(newtcp);
+	}
         if(!postcb(newtcp))
         {
             return false;

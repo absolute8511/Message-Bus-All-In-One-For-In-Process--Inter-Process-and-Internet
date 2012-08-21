@@ -18,7 +18,7 @@ public:
 
     bool AddTcpSock(TcpSockSmartPtr sp_tcp);
     void RemoveTcpSock(TcpSockSmartPtr sp_tcp);
-    bool CreateTcpSock(SockWaiterBase& waiter, const std::string& ip, unsigned short int port,
+    bool CreateTcpSock(SockWaiterBase* waiter, const std::string& ip, unsigned short int port,
         int num, int timeout, SockHandler tcp_callback, PostCB postcb);
     TcpClientPool(){}
     ~TcpClientPool(){}
