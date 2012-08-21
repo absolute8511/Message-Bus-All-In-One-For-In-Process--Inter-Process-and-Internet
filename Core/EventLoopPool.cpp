@@ -25,6 +25,7 @@ typedef std::map<std::string, EventLoopWrapper > EventLoopContainerT;
 static EventLoopContainerT  m_eventloop_pool;
 static EventLoopContainerT  m_innerloop_pool;
 static core::common::locker m_pool_locker;
+static int s_max_tcp_num_inloop = MAX_TCPNUM;
 
 static LoggerCategory g_log("EventLoopPool");
 
@@ -37,8 +38,10 @@ EventLoopPool::EventLoopPool()
 {
 }
 
-bool EventLoopPool::InitEventLoopPool()
+bool EventLoopPool::InitEventLoopPool( int tcp_in_each_innerloop)
 {
+    if(tcp_in_each_innerloop > 0)
+        s_max_tcp_num_inloop = tcp_in_each_innerloop;
     return true;
 }
 
@@ -99,7 +102,7 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
     {
         if(it->second.eventloop)
         {
-            if(it->second.eventloop->GetActiveTcpNum() < MAX_TCPNUM)
+            if(it->second.eventloop->GetActiveTcpNum() < s_max_tcp_num_inloop)
             {
                 addedev = it->second.eventloop;
                 break;
@@ -107,7 +110,7 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
         }
         ++it;
     }
-    if(addedev == NULL || addedev->GetActiveTcpNum() > MAX_TCPNUM)
+    if(addedev == NULL || addedev->GetActiveTcpNum() > s_max_tcp_num_inloop)
     {
         boost::shared_ptr<EventLoop> sock_el(new EventLoop);
 #if defined (__APPLE__) || defined (__MACH__) 

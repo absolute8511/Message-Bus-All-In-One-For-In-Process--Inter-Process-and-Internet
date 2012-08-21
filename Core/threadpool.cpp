@@ -92,7 +92,7 @@ namespace threadpool
             ++i;
         }
     }
-    bool init_thread_pool()
+    bool init_thread_pool(int thread_num)
     {
         /*
         //使用信号方式实现定时器
@@ -105,8 +105,10 @@ namespace threadpool
         if(s_threadpool_running)
             return true;
         timer_thread::create_and_attach(&tpool);
+        if(thread_num <= 0)
+            thread_num = THREAD_POOL_MAX_THREAD;
 
-        for(int i=0;i<THREAD_POOL_MAX_THREAD;i++)
+        for(int i = 0; i < thread_num; i++)
         {
             worker_thread::create_and_attach(&tpool);
         }

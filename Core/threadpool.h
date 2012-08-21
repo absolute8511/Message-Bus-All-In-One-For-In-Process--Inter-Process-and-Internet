@@ -8,7 +8,7 @@ namespace threadpool
 #ifdef __cplusplus
     extern "C" {
 #endif
-    bool init_thread_pool();
+    bool init_thread_pool(int thread_num = 0);
     void destroy_thread_pool();
     // flag = 1 indicate create a new thread to excute the task (useful for long run task).
     bool queue_work_task(task_type const& task,int flag);

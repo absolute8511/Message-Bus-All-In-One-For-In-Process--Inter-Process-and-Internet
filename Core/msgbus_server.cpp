@@ -896,6 +896,7 @@ int main(int argc, char* argv[])
     pthread_t process_thread;
     SimpleLogger::Instance().Init(utility::GetModulePath() + "/msgbus_server_log.log", lv_debug);
 
+    EventLoopPool::InitEventLoopPool(100);
     // register all protocol buffer data handler.
     regist_pbdata_handler<NetMsgBus::PBQueryServicesReq>(onQueryServicesReq);
 

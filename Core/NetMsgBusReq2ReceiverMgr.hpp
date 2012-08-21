@@ -34,7 +34,7 @@ using namespace core::net;
 #define TIMEOUT_SHORT 5
 #define TIMEOUT_LONG  15
 #define MAX_SENDMSG_CLIENT_NUM  1024
-#define CLIENT_POOL_SIZE  25
+#define CLIENT_POOL_SIZE  30
 
 namespace NetMsgBus
 {
@@ -564,8 +564,6 @@ private:
 
     typedef std::deque< Req2ReceiverTask > Req2ReceiverTaskContainerT;
     Req2ReceiverTaskContainerT m_reqtoreceiver_task_container;
-
-    //EventLoopPool m_evpool;
 
     core::common::condition m_reqtoreceiver_cond;
     core::common::locker    m_reqtoreceiver_locker;
