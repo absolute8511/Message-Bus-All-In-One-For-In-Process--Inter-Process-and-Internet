@@ -135,6 +135,7 @@ public:
     MsgBusRegisterRsp()
         :MsgBusPackHeadRsp(RSP_REGISTER),
         err_msg_len(0),
+        err_msg(0),
         needfree(false)
     {
     }
@@ -266,6 +267,8 @@ class MsgBusSendMsgReq : public MsgBusPackHeadReq
 public:
     MsgBusSendMsgReq()
         :MsgBusPackHeadReq(REQ_SENDMSG),
+        msg_len(0),
+        msg_content(0),
         needfree(false)
     {
     }
@@ -302,6 +305,8 @@ class MsgBusSendMsgRsp : public MsgBusPackHeadRsp
 public:
     MsgBusSendMsgRsp()
         :MsgBusPackHeadRsp(RSP_SENDMSG),
+        err_msg_len(0),
+        err_msg(0),
         needfree(false)
     {
     }

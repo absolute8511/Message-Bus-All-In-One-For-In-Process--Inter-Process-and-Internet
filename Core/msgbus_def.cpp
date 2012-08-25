@@ -655,7 +655,7 @@ void MsgBusSendMsgRsp::PackBody(char *data, size_t len)
     p += sizeof(ret_code);
     *((uint32_t*)p) = htonl(msg_id);
     p += sizeof(msg_id);
-    *((uint32_t*)p) = htonl(err_msg_len);
+    *((uint16_t*)p) = htons(err_msg_len);
     p += sizeof(err_msg_len);
     strncpy(p, err_msg, err_msg_len);
 }
@@ -683,7 +683,7 @@ int MsgBusSendMsgRsp::UnPackBody(const char *data, size_t len)
     p += sizeof(msg_id);
     if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len)))
         return -1;
-    err_msg_len = ntohl(*((uint32_t*)p));
+    err_msg_len = ntohs(*((uint16_t*)p));
     p += sizeof(err_msg_len);
     if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len) + err_msg_len))
         return -1;
