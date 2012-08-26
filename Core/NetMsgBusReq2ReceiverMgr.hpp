@@ -273,7 +273,7 @@ private:
                 return readedlen;
             {
                 //printf("one sync data returned. sid:%u.\n", sync_sid);
-                //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), sync_sid);
+                //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
                 m_sendmsg_rsp_container[sync_sid].ready = true;
                 m_sendmsg_rsp_container[sync_sid].rsp_content = std::string(pdata, data_len);
@@ -339,7 +339,7 @@ private:
             core::common::locker_guard guard(m_rsp_sendmsg_lock);
             ++sync_sessionid_;
             waiting_syncid = sync_sessionid_;
-            //g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d\n", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
+            //g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
             m_sendmsg_rsp_container[waiting_syncid].ready = false;
             m_sendmsg_rsp_container[waiting_syncid].rsp_content = ""; 
         }

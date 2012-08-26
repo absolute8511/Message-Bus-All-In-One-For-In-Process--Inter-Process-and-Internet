@@ -266,7 +266,7 @@ private:
             }
             if(is_sync)
             {// 对方指定了同步等待回复，那么就直接调用消息处理函数后，把数据写回
-                //g_log.Log(lv_debug, "got a sync request :%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), sync_sid);
+                //g_log.Log(lv_debug, "got a sync request :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
                 threadpool::queue_work_task(boost::bind(NetMsgBusRspSendMsg, sp_tcp, msgcontent, sync_sid), 0);
             }
             else

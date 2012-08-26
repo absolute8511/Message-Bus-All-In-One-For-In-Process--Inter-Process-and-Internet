@@ -123,7 +123,7 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
 // response to the client who has send a msg using sync mode.
 inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent, uint32_t sync_sid)
 {
-    //g_log.Log(core::lv_debug, "process a sync request begin :%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), sync_sid);
+    //g_log.Log(core::lv_debug, "process a sync request begin :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
     std::string msgid;
     if(CheckMsgId(netmsgbus_msgcontent, msgid))
     {
