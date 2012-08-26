@@ -27,10 +27,13 @@ public:
     boost::shared_ptr<SockWaiterBase> GetEventWaiter() { return m_event_waiter; }
     //bool IsTcpExist(TcpSockSmartPtr sp_tcp);
     bool QueueTaskToLoop(EvTask task);
+    bool QueueTaskToWriteLoop(EvTask task);
     bool IsInLoopThread();
+    bool IsInWriteLoopThread();
     bool UpdateTcpSock(TcpSockSmartPtr sp_tcp);
     void RemoveTcpSock(TcpSockSmartPtr sp_tcp);
 private:
+    static void WriteLoopStartedNotify();
     void AddTcpSockToLoopInLoopThread(TcpSockSmartPtr sp_tcp);
     static void* Loop(void*);
     void CloseAllClient();
@@ -40,6 +43,9 @@ private:
     pthread_t             m_cur_looptid;
     std::vector<EvTask>   m_pendings;
     common::locker        m_lock;
+    const SockEvent       m_handle_type;
+    std::string           m_write_thread_name;
+    pthread_t             m_write_thread_pid;
 };
 } }
 

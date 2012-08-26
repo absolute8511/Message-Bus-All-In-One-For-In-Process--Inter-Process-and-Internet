@@ -41,6 +41,10 @@ namespace threadpool
             m_timertask_container.clear();
             notifyall_task_coming_event();
         }
+
+        bool get_named_thread(const std::string& threadname, pthread_t& pid);
+        void terminate_named_thread(const std::string& threadname);
+
         inline bool getterminate()
         {
             return m_terminateall;
@@ -87,7 +91,7 @@ namespace threadpool
         // caller must make sure thread safe.
         void add_named_thread(pthread_t pid, const std::string& threadname, boost::shared_ptr<named_worker_thread> spworker);
         bool push_task_to_named_thread(const task_type& task, const std::string& threadname);
-         // 仅仅删除线程对象的引用
+         // 仅仅删除线程对象的引用, called by the named thread when it quit normally.
         void remove_named_thread(const std::string& threadname);
 
         volatile bool m_terminateall;

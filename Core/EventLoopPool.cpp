@@ -139,13 +139,11 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
             return false;
         }
     }
-    if(addedev)
-    {
-        addedev->AddTcpSockToLoop(sp_tcp);
-        //g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
-        return true;
-    }
-    return false;
+    if(!addedev)
+        return false;
+    addedev->AddTcpSockToLoop(sp_tcp);
+    //g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
+    return true;
 }
 
 boost::shared_ptr<EventLoop> EventLoopPool::GetEventLoop(const std::string& name)

@@ -29,9 +29,10 @@ public:
     void  SetCloseAfterExec();
     void  SetCaredSockEvent(SockEvent caredev);
     SockEvent GetCaredSockEvent() const;
+    SockEvent GetCurrentEvent() const;
     void  AddEvent(EventResult er);
     void  ClearEvent();
-    bool  IsNeedWrite();
+    //bool  IsNeedWrite();
     void  DisAllowSend();
     bool  Writeable() const;
         // return false if buffer is full.
@@ -56,12 +57,16 @@ private:
     void SendDataInLoop(const std::string& data);
     void SendDataInLoop(const char* pdata, size_t size);
     void  ShutDownWrite();
+    bool DoSend();
+    void AddAndUpdateEvent(EventResult er);
+    void RemoveAndUpdateEvent(EventResult er);
     // 每个fd都有2个缓冲区,一个输入,一个输出, 必须使用连续内存, 因此deque不能使用(deque分块连续)
     SockBufferT m_inbuf;
     SockBufferT m_outbuf;
     SockHandler m_sockcb;
     
     int  m_fd;
+    int  m_fd_w;  // dup fd for write only
     // this flag indicate whether the tcp fd is really shutdown write.
     bool m_writeable;
     // this flag indicate whether more data is allowed to be send to the outbufffer.

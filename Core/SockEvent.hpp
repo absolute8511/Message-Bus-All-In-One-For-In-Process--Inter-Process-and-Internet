@@ -18,6 +18,10 @@ public:
         :event(EV_NOEVENT)
     {
     }
+    SockEvent(EventResult ev)
+        :event(ev)
+    {
+    }
     bool hasAny() const
     {
         return event != EV_NOEVENT;

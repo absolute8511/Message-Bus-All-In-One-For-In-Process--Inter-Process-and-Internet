@@ -53,6 +53,7 @@ void named_worker_thread::died_unexpect()
 {
     printf("named thread: %s died unexpect.\n", m_threadname.c_str());
     assert(0);
+    remove_self_from_threadpool();
 }
 void* named_worker_thread::threadproc(void* param)
 {

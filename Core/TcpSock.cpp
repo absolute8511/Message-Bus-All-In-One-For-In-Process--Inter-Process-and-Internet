@@ -93,7 +93,7 @@ SockEvent TcpSock::GetCaredSockEvent() const
 
 int TcpSock::GetFD() const
 {
-    assert(m_fd>=0);
+    //assert(m_fd>=0);
     return m_fd;
 }
 
@@ -101,7 +101,10 @@ void TcpSock::RenewTimeout()
 {
     //g_log.Log(lv_debug, "renew timeout : fd-%d", m_fd);
     if(m_is_timeout_need)
+    {
+        assert(m_evloop->IsInLoopThread());
         m_timeout_ms = core::utility::GetTickCount() + m_timeout_renew;
+    }
 }
 
 void TcpSock::SetTimeout(int to_ms)
@@ -126,6 +129,7 @@ void TcpSock::UpdateTimeout()
         //g_log.Log(lv_debug, "update timeout : fd-%d", m_fd);
         if(core::utility::GetTickCount() > m_timeout_ms)
         {
+            assert(m_evloop->IsInLoopThread());
             RenewTimeout();
             if(m_sockcb.onTimeout)
                 m_sockcb.onTimeout(shared_from_this());
@@ -141,46 +145,79 @@ int TcpSock::GetLastError() const
 }
 
 // the tcp sock has data to send out to network.
-bool TcpSock::IsNeedWrite()
-{
-    assert(m_evloop->IsInLoopThread());
-    if(IsClosed() || !Writeable())
-        return false;
-    return !m_outbuf.empty();
-}
+//bool TcpSock::IsNeedWrite()
+//{
+//    if(m_evloop)
+//        assert(m_evloop->IsInLoopThread());
+//    if(IsClosed() || !Writeable())
+//        return false;
+//    return !m_outbuf.empty();
+//}
 
 // the caller must protect the func use lock.
 void TcpSock::ShutDownWrite()
 {
     if(IsClosed())
         return;
-    assert(m_evloop->IsInLoopThread());
+    if(m_evloop && !m_evloop->IsInWriteLoopThread())
+    {
+        m_evloop->QueueTaskToWriteLoop(boost::bind(&TcpSock::ShutDownWrite, shared_from_this()));
+        return;
+    }
     m_writeable = false;
     // before shutdown we try send the left data directly.
     if(!m_outbuf.empty() /*&& (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size())*/)
     {
         g_log.Log(lv_warn, "outbuf is not empty while shutdown write, some data may not sended.");
     }
+    //g_log.Log(lv_debug, " shutdown write. fd:%d", m_fd);
     ::shutdown(m_fd, SHUT_WR);
     m_outbuf.clear();
 }
+
+void TcpSock::AddAndUpdateEvent(EventResult ev)
+{
+    if(m_evloop)
+    {
+        if(!m_evloop->IsInLoopThread())
+            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::AddAndUpdateEvent, shared_from_this(), ev));
+        else
+        {
+            m_caredev.AddEvent(ev);
+            m_evloop->UpdateTcpSock(shared_from_this());
+        }
+    }
+}
+
+void TcpSock::RemoveAndUpdateEvent(EventResult ev)
+{
+    if(m_evloop)
+    {
+        if(!m_evloop->IsInLoopThread())
+            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::RemoveAndUpdateEvent, shared_from_this(), ev));
+        else
+        {
+            m_caredev.RemoveEvent(ev);
+            m_evloop->UpdateTcpSock(shared_from_this());
+        }
+    }
+}
+
 void TcpSock::DisAllowSend()
 {
     // if no data to write , we can really to shutdown the write of fd.
     // or we should wait for the data be sended.
     m_allow_more_send = false;
+    //g_log.Log(lv_debug, " disallow write. fd:%d", m_fd);
     if(m_evloop)
     {
-        if(!m_evloop->IsInLoopThread())
-            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::DisAllowSend, shared_from_this()));
-        else if(m_outbuf.empty())
+        if(m_outbuf.empty())
         {
             ShutDownWrite();
         }
         else
         {
-            m_caredev.AddEvent(EV_WRITE);
-            m_evloop->UpdateTcpSock(shared_from_this());
+            AddAndUpdateEvent(EV_WRITE);
         }
     }
 }
@@ -189,7 +226,15 @@ void TcpSock::Close(bool needremove)
 {
     if(m_fd == -1 || m_isclosing)
         return;
-    assert(m_evloop->IsInLoopThread());
+
+    if(m_evloop)
+    {
+        if(!m_evloop->IsInLoopThread())
+        {
+            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::Close, shared_from_this(), needremove));
+            return;
+        }
+    }
     m_isclosing = true;
     m_writeable = false;
     m_allow_more_send = false;
@@ -207,14 +252,21 @@ void TcpSock::Close(bool needremove)
     //m_tmpoutbuf.clear();
     if(m_fd != -1)
     {
-        //g_log.Log(lv_debug, "the tcp is going to close. fd:%d.\n", m_fd);
+        //g_log.Log(lv_debug, "the tcp is going to close. fd:%d.", m_fd);
         // mark as closed first, because any new tcp created by other thread
         // will immediately reuse the fd before the m_fd be setted to -1.
-        ::close(m_fd);
+        int nullfd;
+        nullfd = open("/dev/null", O_RDONLY);
+        if(nullfd >= 0)
+        {
+            dup2(nullfd, m_fd);
+            close(nullfd);
+        }
+        //::close(m_fd);
         m_fd = -1;
     }
     m_inbuf.clear();
-    m_outbuf.clear();
+    //m_outbuf.clear();
     m_alive_counter = -1;
     m_desthost.host_ip = "";
     m_is_timeout_need = false;
@@ -237,20 +289,74 @@ void TcpSock::SendDataInLoop(const std::string& data)
     SendDataInLoop(data.data(), data.size());
 }
 
+bool TcpSock::DoSend()
+{
+    while(true)
+    {
+        int writed = write(m_fd, m_outbuf.data(), m_outbuf.size());
+        if(writed > 0)
+        {
+            //g_log.Log(lv_debug, "thread:%lu, write on fd:%d. bytes:%d, t:%lld",(unsigned long)pthread_self(), m_fd, writed, (int64_t)core::utility::GetTickCount());
+            m_outbuf.pop_front(writed);
+            if(m_outbuf.empty())
+            {
+                RemoveAndUpdateEvent(EV_WRITE);
+                if(m_sockcb.onSend)
+                {
+                    if(!m_sockcb.onSend(shared_from_this()))
+                    {// return false to indicate disallow for more sending.
+                        // we will try to send the data left in the buffer,
+                        // but not allow more data to add to the buffer.
+                        DisAllowSend();
+                    }
+                }
+                if(!m_allow_more_send)
+                {
+                    // if no data in buffer and disallow more data be added to buffer
+                    // it means we can shutdown the tcp fd since no more data will be sended.
+                    ShutDownWrite();
+                    return false; 
+                    // fd is not available, so here should find the next event.
+                }
+            }
+        }
+        else
+        {
+            if(writed == 0)
+                break;
+            if((errno != EAGAIN) && (errno != EINTR))
+            {
+                m_errno = errno;
+                if(m_sockcb.onError)
+                {
+                    m_sockcb.onError(shared_from_this());
+                }
+                g_log.Log(lv_error, "write error on fd, error fd:%d.", m_fd);
+                Close();
+                return false;
+            }
+            // errno is EAGAIN, end writing.
+            if(errno == EAGAIN)
+                break;
+        }
+    }
+    return true;
+}
+
 void TcpSock::SendDataInLoop(const char* pdata, size_t size)
 {
     if(m_evloop)
-        assert(m_evloop->IsInLoopThread());
+        assert(m_evloop->IsInWriteLoopThread());
     if(IsClosed() || !Writeable())
     {
         m_errno = EPIPE;
         return;
     }
     m_outbuf.push_back(pdata, size);
-    if(m_evloop)
+    if(DoSend())
     {
-        m_caredev.AddEvent(EV_WRITE);
-        m_evloop->UpdateTcpSock(shared_from_this());
+        if(!m_outbuf.empty())
+            AddAndUpdateEvent(EV_WRITE);
     }
 }
 
@@ -262,6 +368,7 @@ bool TcpSock::SendData(const char* pdata, size_t size)
         {
             if(IsClosed() || !Writeable())
             {
+                g_log.Log(lv_debug, " send data after closing or not writeable. fd:%d", m_fd);
                 m_errno = EPIPE;
                 return false;
             }
@@ -273,11 +380,19 @@ bool TcpSock::SendData(const char* pdata, size_t size)
                 return false;
             }
 #endif
-            if(!m_evloop->IsInLoopThread())
+            if(m_evloop)
             {
-                m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::SendDataInLoop, shared_from_this(),
-                        std::string(pdata, size)));
-                return true;
+                if(!m_evloop->IsInWriteLoopThread())
+                {
+                    m_evloop->QueueTaskToWriteLoop(boost::bind(&TcpSock::SendDataInLoop, shared_from_this(),
+                            std::string(pdata, size)));
+                    return true;
+                }
+            }
+            else
+            {
+                g_log.Log(lv_debug, " send data while no EventLoop. fd:%d", m_fd);
+                return false;
             }
             SendDataInLoop(pdata, size);
             return true;
@@ -309,13 +424,24 @@ void TcpSock::AddEvent(EventResult er)
 {
     m_sockev.AddEvent(er);
 }
+
+SockEvent TcpSock::GetCurrentEvent() const
+{
+    return m_sockev;
+}
+
 void TcpSock::HandleEvent()
 {
-    assert(m_evloop->IsInLoopThread());
     if(IsClosed())
         return;
+    assert(m_evloop->IsInLoopThread() || m_evloop->IsInWriteLoopThread());
     if( m_sockev.hasRead() )
     {
+        if(m_evloop && !m_evloop->IsInLoopThread())
+        {
+            //read event will be only handled in read thread.
+            return;
+        }
         // edge triggered mode in epoll will not notify the old event again,
         // so we should keep reading or writing until EAGAIN happened.
         while(true)
@@ -385,62 +511,20 @@ void TcpSock::HandleEvent()
     }
     if( m_sockev.hasWrite() && m_writeable )
     {
-        while(true)
+        if(m_evloop && !m_evloop->IsInWriteLoopThread())
         {
-            int writed = write(m_fd, m_outbuf.data(), m_outbuf.size());
-            if(writed > 0)
-            {
-                //g_log.Log(lv_debug, "thread:%lu, write on fd:%d. bytes:%d, t:%lld",(unsigned long)pthread_self(), m_fd, writed, (int64_t)core::utility::GetTickCount());
-                m_outbuf.pop_front(writed);
-                if(m_outbuf.empty())
-                {
-                    if(m_evloop)
-                    {
-                        m_caredev.RemoveEvent(EV_WRITE);
-                        m_evloop->UpdateTcpSock(shared_from_this());
-                    }
-                    if(m_sockcb.onSend)
-                    {
-                        if(!m_sockcb.onSend(shared_from_this()))
-                        {// return false to indicate disallow for more sending.
-                            // we will try to send the data left in the buffer,
-                            // but not allow more data to add to the buffer.
-                            DisAllowSend();
-                        }
-                    }
-                    if(!m_allow_more_send)
-                    {
-                        // if no data in buffer and disallow more data be added to buffer
-                        // it means we can shutdown the tcp fd since no more data will be sended.
-                        ShutDownWrite();
-                        return; 
-                        // fd is not available, so here should find the next event.
-                    }
-                }
-            }
-            else
-            {
-                if(writed == 0)
-                    break;
-                if((errno != EAGAIN) && (errno != EINTR))
-                {
-                    m_errno = errno;
-                    if(m_sockcb.onError)
-                    {
-                        m_sockcb.onError(shared_from_this());
-                    }
-                    g_log.Log(lv_error, "write error on fd, error fd:%d.", m_fd);
-                    Close();
-                    return;
-                }
-                // errno is EAGAIN, end writing.
-                if(errno == EAGAIN)
-                    break;
-            }
+            // write event will only be handled in write thread
+            return;
         }
+        if(!DoSend())
+            return;
     }
     if( m_sockev.hasException() )
     {
+        if(m_evloop && !m_evloop->IsInLoopThread())
+        {
+            return;
+        }
         m_errno = errno;
         if(m_sockcb.onError)
         {

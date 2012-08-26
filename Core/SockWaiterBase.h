@@ -63,6 +63,7 @@ protected:
     bool m_newnotify;
     bool m_running;
     EventLoop* m_evloop;
+    int m_allactive;
 
 };
 } }

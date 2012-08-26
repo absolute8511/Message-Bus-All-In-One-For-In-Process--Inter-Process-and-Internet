@@ -45,6 +45,9 @@ static void* sig_thread(void *arg)
         case SIGPIPE:
             g_log.Log(lv_debug, "got SIGPIPE signal. ignored.");
             break;
+        case SIGINT:
+            s_break = true;
+            break;
         default:
             break;
         }
@@ -58,6 +61,8 @@ void init_signals_env()
     //sigdelset(&maskset, SIGKILL);
     //sigdelset(&maskset, SIGSTOP);
     sigaddset(&maskset, SIGPIPE);
+    sigaddset(&maskset, SIGINT);
+    sigaddset(&maskset, SIGHUP);
 
     int ret;
     ret = pthread_sigmask(SIG_BLOCK, &maskset, NULL);
@@ -117,8 +122,8 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
-        NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
+        //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
         //sleep(1);
         return true;
     }
@@ -126,8 +131,8 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
-        NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+        //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
         //sleep(1);
         return true;
     }
@@ -300,6 +305,7 @@ void testthreadpool()
     threadpool::queue_work_task(boost::bind(func3,4,5),1);
     threadpool::queue_work_task_to_named_thread(boost::bind(func3,4,5),"mynamed2");
     threadpool::queue_work_task_to_named_thread(task1,"mynamed2");
+    threadpool::terminate_named_thread("mynamed2");
     threadpool::queue_timer_task(boost::bind(func4,"1234567"),3,true);
     threadpool::queue_work_task(task1,0);
     id = threadpool::queue_timer_task(task1,1,false);
@@ -372,6 +378,68 @@ void testlocalmsgbus()
     printAllMsgHandler("msg_testMsgBus1");
     sleep(2);
 }
+
+void testremotemsgbus_broadcast_sub(MsgBusParam& param, const std::string& longdata)
+{
+    GenerateNextTestParam(param, longdata);
+    // 测试广播消息
+    NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+
+    GenerateNextTestParam(param);
+    // 测试群组消息, 通过客户端直接发送预期失败
+    //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+    //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+
+    GenerateNextTestParam(param, longdata);
+    // 测试群组消息，通过服务器可以发送群组消息
+    NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+    NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+}
+
+void testremotemsgbus_direct_sub(MsgBusParam& param, const std::string& longdata)
+{
+    // 测试向指定的接收者发送消息
+    GenerateNextTestParam(param);
+    NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+    NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+
+    GenerateNextTestParam(param, longdata);
+    NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
+    NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+}
+
+void testremotemsgbus_relay_sub(MsgBusParam& param, const std::string& longdata)
+{
+    GenerateNextTestParam(param);
+    NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+    NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+    GenerateNextTestParam(param);
+    NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+    NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
+}
+
+void testremotemsgbus_sync_sub(MsgBusParam& param)
+{
+    //GenerateNextTestParam(param);
+    std::string rsp_content;
+    //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
+    bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
+        param, rsp_content, 2);
+    if(success)
+    {
+        //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
+        //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
+        //if(mintimeout > 1)
+        //  --mintimeout;
+        //sleep(3);
+    }
+    else
+    {
+        g_log.Log(lv_debug, "timeout(%d) err get net data in thread:%llu", (uint64_t)pthread_self());
+        s_break = true;
+    }
+}
+
 // 测试远程消息总线，跨进程跨机器等
 void testremotemsgbus()
 {
@@ -454,7 +522,7 @@ void testremotemsgbus()
         int mintimeout = 3;
 
         threadpool::task_type t = boost::bind(testSyncGetData);
-        for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
+        for(int cocurrent = 0; cocurrent < 30; ++cocurrent)
         {
             threadpool::queue_work_task(t, 1);
         }
@@ -464,64 +532,18 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            //GenerateNextTestParam(param, longdata);
-            // 测试广播消息
-            //NetMsgBusSendMsg("", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-
-            //GenerateNextTestParam(param);
-            // 测试群组消息, 通过客户端直接发送预期失败
-            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-
-            //GenerateNextTestParam(param, longdata);
-            // 测试群组消息，通过服务器可以发送群组消息
-            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg2", param, SendUseServerRelay);
-            //NetMsgBusSendMsg("test.", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //GenerateNextTestParam(param);
-            // 测试向指定的接收者发送消息
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
+            //testremotemsgbus_broadcast_sub(param, longdata);
+            //testremotemsgbus_direct_sub(param, longdata);
+            //testremotemsgbus_relay_sub(param, longdata);
             
             sendcounter++;
             if(sendcounter % 100 == 0)
             {
                 printf(" in main {%d}\n ", sendcounter);
-                if(sendcounter >= 1000)
+                if(sendcounter >= 10000)
                     break;
             }
-
-            //GenerateNextTestParam(param);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //NetMsgBusSendMsg("test.receiverclient_A", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //GenerateNextTestParam(param, longdata);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg2", param, SendDirectToClient);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendDirectToClient);
-            //GenerateNextTestParam(param);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            //NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
-            
-
-            //GenerateNextTestParam(param);
-            //std::string rsp_content;
-            //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
-            //bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
-            //    param, rsp_content, mintimeout);
-            //threadpool::queue_work_task(boost::bind(testSyncGetData, "test.receiverclient_A",
-            //        "msg_netmsgbus_testgetdata", param, 15), 0);
-            //if(success)
-            {
-                //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
-                //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
-                //if(mintimeout > 1)
-                  //  --mintimeout;
-                //sleep(3);
-            }
-            //else
-            {
-                //g_log.Log(lv_warn, "timeout(%d) err get net data in thread:%llu.errmsg:%s\n", mintimeout, (uint64_t)pthread_self(),rsp_content.c_str());
-                //++mintimeout;
-            }
-            
+            testremotemsgbus_sync_sub(param);            
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
@@ -557,22 +579,13 @@ void testSyncGetData()
         if(s_break)
             break;
         ++cnt;
-        std::string rsp;
-        bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",param, rsp, 2);
-        if(success)
+        testremotemsgbus_sync_sub(param);
+        if(cnt % 500 == 0)
         {
-            if(cnt % 500 == 0)
-            {
-                printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
-            }
-            if(cnt > 5000)
-                break;
+            printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
         }
-        else
-        {
-            g_log.Log(lv_warn, "timeout() err get net data in thread:%llu. errmsg:%s\n", (uint64_t)pthread_self(), rsp.c_str());
-            exit(-1);
-        }
+        if(cnt > 10000)
+            break;
     }
     int64_t endtime = utility::GetTickCount();
     g_log.Log(lv_warn, "get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
@@ -759,10 +772,10 @@ void testSimpleLogger()
 
 int main()
 {
-    //init_signals_env();
+    init_signals_env();
     using namespace core;
     //SimpleLogger::Instance().Init("/Users/absolute/workspace/aliwwforlinux/Bin/testlog.log", lv_debug);
-    SimpleLogger::Instance().Init("./testlog.log", lv_warn);
+    SimpleLogger::Instance().Init("./testlog.log", lv_debug);
     threadpool::init_thread_pool();
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);

@@ -1,11 +1,13 @@
 #include "EventLoop.h"
 #include "SockWaiterBase.h"
 #include "SimpleLogger.h"
+#include "threadpool.h"
 
 #include <errno.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
 
 #define TIMEOUT_SHORT 2
 
@@ -41,18 +43,21 @@ bool EventLoop::IsInLoopThread()
     return pthread_equal(m_cur_looptid, pthread_self()) != 0;
 }
 
+bool EventLoop::IsInWriteLoopThread()
+{
+    return pthread_equal(m_write_thread_pid, pthread_self()) != 0;
+}
+
+void EventLoop::WriteLoopStartedNotify()
+{
+    g_log.Log(lv_debug, "write loop started!");
+}
+
 bool EventLoop::AddTcpSockToLoop(TcpSockSmartPtr sp_tcp)
 {
     if(m_terminal || m_event_waiter==NULL)
         return false;
-    sp_tcp->SetEventLoop(this);
-    if(!IsInLoopThread())
-    {
-        QueueTaskToLoop(boost::bind(&EventLoop::AddTcpSockToLoopInLoopThread,
-                shared_from_this(), sp_tcp));
-        return true;
-    }
-    AddTcpSockToLoopInLoopThread(sp_tcp);
+    m_event_waiter->AddTcpSock(sp_tcp);
     return true;
 }
 
@@ -87,6 +92,11 @@ bool EventLoop::QueueTaskToLoop(EvTask task)
     if(m_event_waiter)
         m_event_waiter->NotifyNewActive(UPDATEEVENT);
     return true;
+}
+
+bool EventLoop::QueueTaskToWriteLoop(EvTask task)
+{
+    return threadpool::queue_work_task_to_named_thread(task, m_write_thread_name);
 }
 
 void EventLoop::TerminateLoop()
@@ -130,7 +140,12 @@ bool EventLoop::StartLoop(pthread_t& tid)
         //printf("event loop :%lld started.\n", (uint64_t)tid);
         g_log.Log(lv_debug, "event loop : %lld started.", (uint64_t)tid);
         m_cur_looptid = tid;
-        return true;
+        m_write_thread_name = boost::lexical_cast<std::string>(m_cur_looptid);
+        threadpool::queue_work_task_to_named_thread(boost::bind(&EventLoop::WriteLoopStartedNotify), m_write_thread_name);
+        if(threadpool::get_named_thread(m_write_thread_name, m_write_thread_pid))
+        {
+            return true;
+        }
     }
     m_terminal = true;
     g_log.Log(lv_error, "start event loop thread failed.");
@@ -208,6 +223,10 @@ void* EventLoop::Loop(void* param)
             TcpSockSmartPtr sp_tcp = (*ready_tcp_it).second;
             if(sp_tcp)
             {
+                if(sp_tcp->GetCurrentEvent().hasWrite())
+                {
+                    threadpool::queue_work_task_to_named_thread(boost::bind(&TcpSock::HandleEvent, sp_tcp), el->m_write_thread_name);
+                }
                 sp_tcp->HandleEvent();
             }
         }// end of while of readytcps process.
@@ -215,6 +234,7 @@ void* EventLoop::Loop(void* param)
 
     }// end of while(true)
     el->m_event_waiter->DestroyWaiter();
+    threadpool::terminate_named_thread(el->m_write_thread_name);
     g_log.Log(lv_debug, "event loop:%ld exit loop.", (long)el->m_cur_looptid);
     el->m_islooprunning = false;
     return 0;

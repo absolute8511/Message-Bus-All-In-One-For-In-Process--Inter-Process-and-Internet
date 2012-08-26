@@ -49,8 +49,13 @@ void threadpoolimp::waittoterminate()
     {
         pthread_join(m_pids[i],NULL);
     }
-    NamedThreadContainerT::iterator it = m_named_threads.begin();
-    while(it != m_named_threads.end())
+    NamedThreadContainerT temp_named_threads;
+    {
+        core::common::locker_guard guard(m_locker);
+        temp_named_threads = m_named_threads;
+    }
+    NamedThreadContainerT::iterator it = temp_named_threads.begin();
+    while(it != temp_named_threads.end())
     {
         if(it->second.first)
         {
@@ -61,7 +66,7 @@ void threadpoolimp::waittoterminate()
     }
     for(size_t i=0;i<m_alone_pids.size();i++)
     {
-        pthread_kill(m_alone_pids[i], SIGKILL);
+        pthread_kill(m_alone_pids[i], SIGINT);
         printf("thread killed : %lu.\n", (unsigned long)m_alone_pids[i]);
     }
     //printf("wait all thread joined success.\n");
@@ -79,7 +84,7 @@ bool threadpoolimp::push_task_to_named_thread(const task_type& task, const std::
     if(m_terminateall)
         return false;
     NamedThreadContainerT::iterator it = m_named_threads.find(threadname);
-    if(it == m_named_threads.end())
+    if(it == m_named_threads.end() || !it->second.first)
     {
         if(!named_worker_thread::create_and_attach(this, threadname))
             return false;
@@ -92,17 +97,40 @@ bool threadpoolimp::push_task_to_named_thread(const task_type& task, const std::
     }
     return false;
 }
-// 仅仅删除线程对象的引用
-void threadpoolimp::remove_named_thread(const std::string& threadname)
+
+void threadpoolimp::terminate_named_thread(const std::string& threadname)
 {
+    core::common::locker_guard guard(m_locker);
     NamedThreadContainerT::iterator it = m_named_threads.find(threadname);
     if(it != m_named_threads.end())
     {
         if(it->second.first)
         {
             it->second.first->terminate_thread();
-            it->second.first.reset();
         }
+    }
+}
+
+bool threadpoolimp::get_named_thread(const std::string& threadname, pthread_t& pid)
+{
+    core::common::locker_guard guard(m_locker);
+    NamedThreadContainerT::iterator it = m_named_threads.find(threadname);
+    if(it == m_named_threads.end() || !it->second.first)
+    {
+        return false;
+    }
+    pid = it->second.second;
+    return true;
+}
+
+// 仅仅删除线程对象的引用, called when the named thread quit normally.
+void threadpoolimp::remove_named_thread(const std::string& threadname)
+{
+    core::common::locker_guard guard(m_locker);
+    NamedThreadContainerT::iterator it = m_named_threads.find(threadname);
+    if(it != m_named_threads.end())
+    {
+        m_named_threads.erase(it);
     }
 }
 

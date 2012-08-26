@@ -35,6 +35,15 @@ namespace threadpool
         return tpool.push_task_to_named_thread(task, threadname);
     }
 
+    bool get_named_thread(const std::string& threadname, pthread_t& pid)
+    {
+        return tpool.get_named_thread(threadname, pid);
+    }
+    void terminate_named_thread(const std::string& threadname)
+    {
+        tpool.terminate_named_thread(threadname);
+    }
+
     bool queue_work_task(task_type const& task,int flag)
     {
         if(!s_threadpool_running)

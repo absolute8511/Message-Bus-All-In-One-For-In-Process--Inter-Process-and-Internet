@@ -120,14 +120,14 @@ bool TcpClientPool::CreateTcpSock(SockWaiterBase* waiter, const std::string& ip,
         newtcp->SetCloseAfterExec();
         newtcp->SetSockHandler(tcp_callback);
 
-	if(waiter)
-	{
-	    waiter->AddTcpSock(newtcp);
-	}
-	else
-	{
-	    EventLoopPool::AddTcpSockToInnerLoop(newtcp);
-	}
+        if(waiter)
+        {
+            waiter->AddTcpSock(newtcp);
+        }
+        else
+        {
+            EventLoopPool::AddTcpSockToInnerLoop(newtcp);
+        }
         if(!postcb(newtcp))
         {
             return false;

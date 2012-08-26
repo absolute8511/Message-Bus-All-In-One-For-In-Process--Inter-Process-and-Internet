@@ -105,17 +105,6 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
 
     struct epoll_event *events = m_prealloc_events;
     memset(events, 0, EPOLL_QUEUE_LEN*sizeof(struct epoll_event));
-    //bool writetimeout_detect = false; 
-    //
-    //TcpSockContainerT::const_iterator cit = m_waiting_tcpsocks.begin();
-    //std::map<int, TcpSockSmartPtr> tcpsocks_tmpmap;
-    //bool writetimeout_detect = false; 
-    //while(cit != m_waiting_tcpsocks.end())
-    //{
-    //    if(!(*cit).second->IsClosed())
-    //        tcpsocks_tmpmap[(*cit).second->GetFD()] = cit->second;
-    //    ++cit;
-    //}
     // the document said: the fd will be removed automatically when the fd is closed.
     int ms = tv.tv_usec/1000 + tv.tv_sec*1000;
     int retfds = ::epoll_wait(m_epfd, events, EPOLL_QUEUE_LEN, ms);
@@ -130,11 +119,6 @@ int EpollWaiter::Wait(TcpSockContainerT& allready, struct timeval& tv)
         //g_log.Log(lv_debug, "error happened while epoll wait");
         return retfds;
     }
-    //if(retfds == 0 && writetimeout_detect)
-    //{
-    //    printf("warning: wait to send data timeout, network may broken, data is not sended.\n");
-    //    g_log.Log(lv_warn, "send data wait timeout, net broken");
-    //}
     TcpSockContainerT::iterator tcp_it = m_waiting_tcpsocks.begin();
     // first update timeout for all waiting tcp.
     while(tcp_it != m_waiting_tcpsocks.end())

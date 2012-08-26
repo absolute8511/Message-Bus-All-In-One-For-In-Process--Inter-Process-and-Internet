@@ -12,7 +12,8 @@ namespace core { namespace net {
 static LoggerCategory g_log("SockWaiterBase");
 
 SockWaiterBase::SockWaiterBase()
-    :m_newnotify(false)
+    :m_newnotify(false),
+    m_allactive(0)
 {
 	if (pipe(m_notify_pipe) < 0) {
 		perror("pipe(notify_pipe) failed.");
@@ -66,11 +67,18 @@ void SockWaiterBase::NotifyNewActiveWithoutLock(kSockActiveNotify active)
 {
 	if (m_notify_pipe[1] != -1)
     {
-		int writed = write(m_notify_pipe[1], &active, sizeof(active));
-        //g_log.Log(lv_debug, "write notify new active :%d", (int)active);
+        // only write to pipe for first notify.
+        if(!m_newnotify)
+        {
+            int writed = write(m_notify_pipe[1], "1", 1);
+            //g_log.Log(lv_debug, "write notify new active :%d", (int)active);
+            if(writed != 1)
+                g_log.Log(lv_error, "notify new active :%d failed !!!", active);
+        }
+
+        m_allactive |= active;
+
         m_newnotify = true;
-        if(writed != sizeof(active))
-            g_log.Log(lv_error, "notify new active :%d failed !!!", active);
     }
 }
 
@@ -82,22 +90,23 @@ int SockWaiterBase::GetAndClearNotify()
         core::common::locker_guard guard(m_common_lock);
         needread = m_newnotify;
         m_newnotify = false;
+        allactive = m_allactive;
+        m_allactive = 0;
     }
     while (needread)
     {
-        kSockActiveNotify c = NOACTIVE;
-        if (read(m_notify_pipe[0], &c, sizeof(c)) != -1)
+        char c;
+        if (read(m_notify_pipe[0], &c, 1) == 1)
         {
             //g_log.Log(lv_debug, "got notify new active :%d, now num:%zu", c, m_waiting_tcpsocks.size());
-            allactive |= c;
-            continue;
+            break;
         }
         else
         {
             if(errno != EAGAIN && errno != EINTR)
             {
                 g_log.Log(lv_error, "get notify in sock waiter error.");
-                return NOACTIVE;
+                return allactive;
             }
             if(errno == EAGAIN)
                 break;
@@ -194,6 +203,7 @@ bool SockWaiterBase::AddTcpSock(TcpSockSmartPtr sp_tcp)
     soev.AddEvent(EV_EXCEPTION);
     sp_tcp->SetCaredSockEvent(soev);
     sp_tcp->SetEventLoop(m_evloop);
+
     return UpdateTcpSock(sp_tcp);
 }
 
