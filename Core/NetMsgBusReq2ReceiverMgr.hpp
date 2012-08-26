@@ -584,7 +584,7 @@ private:
         bool ready;
         std::string rsp_content;
     };
-    std::map< int, RspSendMsgState > m_sendmsg_rsp_container;
+    boost::unordered_map< int, RspSendMsgState > m_sendmsg_rsp_container;
 
     ServerConnMgr* m_server_connmgr;
     volatile bool m_req2receiver_running;

@@ -179,13 +179,10 @@ void TcpSock::AddAndUpdateEvent(EventResult ev)
 {
     if(m_evloop)
     {
-        if(!m_evloop->IsInLoopThread())
-            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::AddAndUpdateEvent, shared_from_this(), ev));
-        else
-        {
-            m_caredev.AddEvent(ev);
-            m_evloop->UpdateTcpSock(shared_from_this());
-        }
+        if(m_caredev.hasEvent(ev))
+            return;
+        m_caredev.AddEvent(ev);
+        m_evloop->UpdateTcpSock(shared_from_this());
     }
 }
 
@@ -193,13 +190,10 @@ void TcpSock::RemoveAndUpdateEvent(EventResult ev)
 {
     if(m_evloop)
     {
-        if(!m_evloop->IsInLoopThread())
-            m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::RemoveAndUpdateEvent, shared_from_this(), ev));
-        else
-        {
-            m_caredev.RemoveEvent(ev);
-            m_evloop->UpdateTcpSock(shared_from_this());
-        }
+        if(!m_caredev.hasEvent(ev))
+            return;
+        m_caredev.RemoveEvent(ev);
+        m_evloop->UpdateTcpSock(shared_from_this());
     }
 }
 
@@ -417,16 +411,19 @@ void TcpSock::SetEventLoop(EventLoop* pev)
 
 void TcpSock::ClearEvent()
 {
+    assert(m_evloop->IsInLoopThread());
     m_sockev.ClearEvent();
 }
 
 void TcpSock::AddEvent(EventResult er)
 {
+    assert(m_evloop->IsInLoopThread());
     m_sockev.AddEvent(er);
 }
 
 SockEvent TcpSock::GetCurrentEvent() const
 {
+    assert(m_evloop->IsInLoopThread());
     return m_sockev;
 }
 

@@ -38,6 +38,10 @@ public:
     {
         return (event & EV_EXCEPTION) != EV_NOEVENT;
     }
+    bool hasEvent(EventResult er) const
+    {
+        return (event & er) != EV_NOEVENT;
+    }
     void AddEvent(EventResult er)
     {
         event = EventResult(event | er); 
