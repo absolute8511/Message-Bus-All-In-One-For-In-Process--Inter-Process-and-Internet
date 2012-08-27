@@ -547,7 +547,7 @@ void testremotemsgbus()
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
-        g_log.Log(lv_debug, "%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, (starttime,endtime));
+        g_log.Log(lv_debug, "%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, starttime,endtime);
         //
     }
 
@@ -584,8 +584,11 @@ void testSyncGetData()
         {
             printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
         }
-        if(cnt > 10000)
-            break;
+        if(cnt % 100 == 0)
+        {
+            if(starttime + 100000 < utility::GetTickCount())
+                break;
+        }
     }
     int64_t endtime = utility::GetTickCount();
     g_log.Log(lv_warn, "get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);

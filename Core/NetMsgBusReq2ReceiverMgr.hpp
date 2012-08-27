@@ -271,13 +271,26 @@ private:
             needlen += data_len;
             if(size < needlen)
                 return readedlen;
+            boost::shared_ptr<RspSendMsgState> ready_sendmsg_rsp;
             {
                 //printf("one sync data returned. sid:%u.\n", sync_sid);
                 //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                m_sendmsg_rsp_container[sync_sid].ready = true;
-                m_sendmsg_rsp_container[sync_sid].rsp_content = std::string(pdata, data_len);
-                m_rsp_sendmsg_condition.notify_all();
+                boost::unordered_map<uint32_t, boost::shared_ptr<RspSendMsgState> >::const_iterator cit = m_sendmsg_rsp_container.find(sync_sid);
+                if(cit == m_sendmsg_rsp_container.end())
+                {
+                    g_log.Log(lv_warn, "received a non-exist sync_sid rsp, sid:%u ", sync_sid);
+                }
+                else
+                {
+                    ready_sendmsg_rsp = cit->second;
+                }
+            }
+            if(ready_sendmsg_rsp)
+            {
+                ready_sendmsg_rsp->ready = true;
+                ready_sendmsg_rsp->rsp_content = std::string(pdata, data_len);
+                ready_sendmsg_rsp->wait_cond.notify_all();
             }
             size -= needlen;
             readedlen += needlen;
@@ -333,15 +346,17 @@ private:
     {
         char syncflag = 0;
         uint32_t waiting_syncid = 0;
+        boost::shared_ptr<RspSendMsgState> cur_sendmsg_rsp;
         if(task.sync)
         {
             syncflag = 1;
             core::common::locker_guard guard(m_rsp_sendmsg_lock);
             ++sync_sessionid_;
             waiting_syncid = sync_sessionid_;
+            assert(!m_sendmsg_rsp_container[waiting_syncid]);
+            m_sendmsg_rsp_container[waiting_syncid].reset(new RspSendMsgState);
+            cur_sendmsg_rsp = m_sendmsg_rsp_container[waiting_syncid];
             //g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
-            m_sendmsg_rsp_container[waiting_syncid].ready = false;
-            m_sendmsg_rsp_container[waiting_syncid].rsp_content = ""; 
         }
         uint32_t write_len = sizeof(syncflag) + sizeof(waiting_syncid) + sizeof(task.data_len) + task.data_len;
         boost::shared_array<char> writedata(new char[write_len]);
@@ -368,16 +383,16 @@ private:
             while(!ready)
             {
                 {
-                    core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                    ready = m_sendmsg_rsp_container[waiting_syncid].ready;
+                    core::common::locker_guard guard(cur_sendmsg_rsp->wait_lock);
+                    ready = cur_sendmsg_rsp->ready;
                     //printf("one sync data waiter wakeup. sid:%d, ready:%d.\n", waiting_syncid, ready?1:0);
                     if(ready)
                     {
-                        rsp_content = m_sendmsg_rsp_container[waiting_syncid].rsp_content;
+                        rsp_content = cur_sendmsg_rsp->rsp_content;
                         break;
                     }
                     //printf("sid:%d sendmsg wake up for ready.\n", waiting_syncid);
-                    int retcode = m_rsp_sendmsg_condition.waittime(m_rsp_sendmsg_lock, &ts);
+                    int retcode = cur_sendmsg_rsp->wait_cond.waittime(cur_sendmsg_rsp->wait_lock, &ts);
                     if(retcode == ETIMEDOUT)
                     {
                         printf(" wakeup for timeout. sid:%d.\n", waiting_syncid);
@@ -578,13 +593,19 @@ private:
     core::common::locker    m_waitingtask_locker;
 
     core::common::locker    m_rsp_sendmsg_lock;
-    core::common::condition m_rsp_sendmsg_condition;
+    //core::common::condition m_rsp_sendmsg_condition;
     struct RspSendMsgState
     {
         bool ready;
         std::string rsp_content;
+        core::common::locker wait_lock;
+        core::common::condition wait_cond;
+        RspSendMsgState()
+            :ready(false)
+        {
+        }
     };
-    boost::unordered_map< int, RspSendMsgState > m_sendmsg_rsp_container;
+    boost::unordered_map< uint32_t, boost::shared_ptr<RspSendMsgState> > m_sendmsg_rsp_container;
 
     ServerConnMgr* m_server_connmgr;
     volatile bool m_req2receiver_running;
