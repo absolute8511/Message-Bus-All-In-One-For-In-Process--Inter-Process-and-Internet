@@ -522,7 +522,7 @@ void testremotemsgbus()
         int mintimeout = 3;
 
         threadpool::task_type t = boost::bind(testSyncGetData);
-        for(int cocurrent = 0; cocurrent < 30; ++cocurrent)
+        for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
         {
             threadpool::queue_work_task(t, 1);
         }
@@ -543,7 +543,7 @@ void testremotemsgbus()
                 if(sendcounter >= 10000)
                     break;
             }
-            testremotemsgbus_sync_sub(param);            
+            //testremotemsgbus_sync_sub(param);            
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();

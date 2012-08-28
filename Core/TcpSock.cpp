@@ -418,13 +418,15 @@ void TcpSock::ClearEvent()
 
 void TcpSock::AddEvent(EventResult er)
 {
-    assert(m_evloop->IsInLoopThread());
+    if(m_evloop)
+        assert(m_evloop->IsInLoopThread());
     m_sockev.AddEvent(er);
 }
 
 SockEvent TcpSock::GetCurrentEvent() const
 {
-    assert(m_evloop->IsInLoopThread());
+    if(m_evloop)
+        assert(m_evloop->IsInLoopThread());
     return m_sockev;
 }
 
