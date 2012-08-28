@@ -88,7 +88,7 @@ private:
         unsigned short int host_port;
     };
     DestHost  m_desthost;
-    int  m_timeout_ms;
+    int64_t  m_timeout_ms;
     int  m_timeout_renew;
     bool m_is_timeout_need;
     EventLoop* m_evloop;
