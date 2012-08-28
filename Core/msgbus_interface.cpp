@@ -106,10 +106,16 @@ struct ReadySendMsgInfo
     bool ready;
     MsgBusParam rspparam;
     bool  rspresult;
+    core::common::locker wait_lock;
+    core::common::condition wait_cond;
+    ReadySendMsgInfo()
+        :ready(false), rspresult(false)
+    {
+    }
 };
 
 // 记录同步发送消息的结果,对应不同线程,唤醒对应的等待线程
-typedef std::map<pthread_t, ReadySendMsgInfo>  ReadySendMsgResultT;
+typedef std::map<pthread_t, boost::shared_ptr<ReadySendMsgInfo> >  ReadySendMsgResultT;
 ReadySendMsgResultT  s_ready_sendmsgs;
 core::common::condition s_ready_sendmsg_cond;
 core::common::locker  s_ready_sendmsg_locker;
@@ -268,10 +274,10 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         taskqueue.push_back(MsgTask(msgid, param, callertid));
         return SendMsgInMsgBusThread(msgid, taskqueue);
     }
+    boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo(new ReadySendMsgInfo());
     {
         core::common::locker_guard guard(s_ready_sendmsg_locker);
-        s_ready_sendmsgs[callertid].ready = false;
-        s_ready_sendmsgs[callertid].rspresult = false;
+        s_ready_sendmsgs[callertid] = sp_readyinfo;
     }
     struct timespec ts;
     ts.tv_sec = time(NULL) + TIMEOUT_SENDMSG;
@@ -284,35 +290,37 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         s_msgtask_condition.notify_one();
     }
 
+    bool ret = false;
     while(!ready)
     {
         {
-            core::common::locker_guard guard(s_ready_sendmsg_locker);
+            core::common::locker_guard guard(sp_readyinfo->wait_lock);
 
             // ready flag must be confirmed first, or maybe wait for a lost notify.
-            ready = s_ready_sendmsgs[callertid].ready;
+            ready = sp_readyinfo->ready;
             //g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
             //   (uint64_t)callertid, msgid.c_str(), ready?1:0);
             if(ready)
             {
                 //g_log.Log(core::lv_debug, "process a sendmsg in msgbus finished:%lld\n", (int64_t)core::utility::GetTickCount());
-                param = s_ready_sendmsgs[callertid].rspparam;
-                bool ret = s_ready_sendmsgs[callertid].rspresult;
-                s_ready_sendmsgs.erase(callertid);
-                return ret;
+                param = sp_readyinfo->rspparam;
+                ret = sp_readyinfo->rspresult;
+                break;
             }
 
-            int retcode = s_ready_sendmsg_cond.waittime(s_ready_sendmsg_locker, &ts);
+            int retcode = sp_readyinfo->wait_cond.waittime(sp_readyinfo->wait_lock, &ts);
             if(retcode == ETIMEDOUT)
             {
                 g_log.Log(lv_warn, "sendmsg ready wakeup for timeout. msgid:%s.", msgid.c_str());
-                s_ready_sendmsgs.erase(callertid);
-                return false;
+                ret = false;
+                break;
             }
         }
     }
+    core::common::locker_guard guard(s_ready_sendmsg_locker);
+    s_ready_sendmsgs.erase(callertid);
 
-    return false;
+    return ret;
 }
 
 // 异步处理，放入消息队列后直接返回
@@ -457,15 +465,32 @@ void* MsgTaskProcessProc(void*)
         {
             firsttask = mtasks.front();
             mtasks.pop_front();
+            boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo;
             if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
             {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
                 core::common::locker_guard guard(s_ready_sendmsg_locker);
-                s_ready_sendmsgs[firsttask.callertid].ready = true;
-                s_ready_sendmsgs[firsttask.callertid].rspparam = firsttask.msgparam;
-                s_ready_sendmsgs[firsttask.callertid].rspresult = ret;
-                //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
-                s_ready_sendmsg_cond.notify_all();
+                ReadySendMsgResultT::const_iterator cit = s_ready_sendmsgs.find(firsttask.callertid);
+                if(cit == s_ready_sendmsgs.end())
+                {
+                    g_log.Log(lv_warn, "send message returned a non-exist callerid, %llu", firsttask.callertid);
+                    continue;
+                }
+                else
+                {
+                    sp_readyinfo = cit->second;
+                }
             }
+            else
+            {
+                continue;
+            }
+
+            core::common::locker_guard guard(sp_readyinfo->wait_lock);
+            sp_readyinfo->ready = true;
+            sp_readyinfo->rspparam = firsttask.msgparam;
+            sp_readyinfo->rspresult = ret;
+            //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
+            sp_readyinfo->wait_cond.notify_all();
         }
     }
     s_msgbus_running = false;
