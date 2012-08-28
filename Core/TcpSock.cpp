@@ -411,7 +411,8 @@ void TcpSock::SetEventLoop(EventLoop* pev)
 
 void TcpSock::ClearEvent()
 {
-    assert(m_evloop->IsInLoopThread());
+    if(m_evloop)
+        assert(m_evloop->IsInLoopThread());
     m_sockev.ClearEvent();
 }
 
