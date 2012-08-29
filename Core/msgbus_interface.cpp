@@ -14,6 +14,7 @@
 #include <deque>
 #include <stdio.h>
 #include <errno.h>
+#include <utility>
 
 #define TIMEOUT_SENDMSG  15
 
@@ -39,8 +40,8 @@ void* MsgTaskProcessProc(void*);
  *};
  */
 
-// 某个消息的处理对象列表类型
-typedef std::list<MsgHandlerWeakRef> MsgHandlerWeakObjList;
+// 某个消息的处理对象列表类型, bool is stand for whether this message handler need be called by the msgbus thread.
+typedef std::list< std::pair<MsgHandlerWeakRef, bool> > MsgHandlerWeakObjList;
 typedef std::list<MsgHandlerStrongRef> MsgHandlerStrongObjList;
 // 所有消息的处理对象总集合类型
 //typedef std::map< std::string, MsgHandlerWeakObjList > MsgHandlerObjContainerT;
@@ -182,7 +183,7 @@ bool PostMsg(const std::string& msgid, boost::shared_array<char> param, uint32_t
 // process message in msgbus thread 
 static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks)
 {
-    assert(pthread_equal(pthread_self(), msgbus_tid));
+    //assert(pthread_equal(pthread_self(), msgbus_tid));
     MsgHandlerStrongObjList msg_handlers;
     // 先将该消息的处理对象队列的强引用拿出来
     {
@@ -194,7 +195,7 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
             MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
             while(weakit != weak_msg_handlers.end())
             {
-                MsgHandlerStrongRef sh = weakit->lock();
+                MsgHandlerStrongRef sh = weakit->first.lock();
                 if(sh)
                 {
                     // strong ref is validate
@@ -274,6 +275,39 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         taskqueue.push_back(MsgTask(msgid, param, callertid));
         return SendMsgInMsgBusThread(msgid, taskqueue);
     }
+    else 
+    {
+        bool can_call_directly = true;
+        {
+            core::common::locker_guard guard(s_msghandlers_locker);
+            MsgHandlerObjContainerT::iterator it = s_all_msghandler_objs.find(msgid);
+            if(it != s_all_msghandler_objs.end())
+            {
+                MsgHandlerWeakObjList::iterator hit = it->second.begin();
+                while(hit != it->second.end())
+                {
+                    if( hit->second )
+                    {
+                        // must called by the msgbus thread, can not call directly.
+                        can_call_directly = false;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // no handler
+                return false;
+            }
+        }
+        if(can_call_directly)
+        {
+            MsgTaskQueue taskqueue;
+            taskqueue.push_back(MsgTask(msgid, param, callertid));
+            return SendMsgInMsgBusThread(msgid, taskqueue);
+        }
+    }
+
     boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo(new ReadySendMsgInfo());
     {
         core::common::locker_guard guard(s_ready_sendmsg_locker);
@@ -355,7 +389,7 @@ bool PostMsg(const std::string& msgid, MsgBusParam param)
     return true;
 }
 // 注册消息处理对象，注意同一个消息相同的处理对象只允许注册一次
-bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj)
+bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj, bool must_called_in_msgbusthread)
 {
     assert(s_msgbus_running);
     if( !s_msgbus_running )
@@ -370,7 +404,7 @@ bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj)
         MsgHandlerWeakObjList::iterator hit = it->second.begin();
         while(hit != it->second.end())
         {
-            MsgHandlerStrongRef sh = hit->lock();
+            MsgHandlerStrongRef sh = hit->first.lock();
             if(sh && (sh.get() == sp_handler_obj.get()) )
             {
                 //已经注册过
@@ -387,12 +421,12 @@ bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj)
         if(it == s_all_msghandler_objs.end())
         {
             MsgHandlerWeakObjList hlist;
-            hlist.push_back(sp_handler_obj);
+            hlist.push_back(std::make_pair(sp_handler_obj, must_called_in_msgbusthread));
             s_all_msghandler_objs[msgid] = hlist;
         }
         else
         {
-            it->second.push_back(sp_handler_obj);
+            it->second.push_back(std::make_pair(sp_handler_obj, must_called_in_msgbusthread));
         }
     }
     return true;
@@ -410,7 +444,7 @@ void UnRegisterMsg(const std::string& msgid, IMsgHandler* p_handler_obj)
         MsgHandlerWeakObjList::iterator hit = it->second.begin();
         while(hit != it->second.end())
         {
-            if(MsgHandlerStrongRef(hit->lock()).get() == p_handler_obj)
+            if(MsgHandlerStrongRef(hit->first.lock()).get() == p_handler_obj)
             {
                 //找到了注册过的对象，删除
                 //g_log.Log(lv_debug, "removing registered handler.");
@@ -603,7 +637,7 @@ void printAllMsgHandler(const std::string& msgid)
             MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
             while(weakit != weak_msg_handlers.end())
             {
-                MsgHandlerStrongRef sh = weakit->lock();
+                MsgHandlerStrongRef sh = weakit->first.lock();
                 if(sh)
                 {
                     // strong ref is validate

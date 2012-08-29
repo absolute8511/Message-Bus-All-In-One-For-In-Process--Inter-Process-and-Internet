@@ -115,7 +115,7 @@ namespace NetMsgBus
     bool PostMsg(const std::string& msgid, MsgBusParam param);
     bool SendMsg(const std::string& msgid, boost::shared_array<char>& param, uint32_t& paramlen);
     bool PostMsg(const std::string& msgid, boost::shared_array<char> param, uint32_t paramlen);
-    bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj);
+    bool RegisterMsg(const std::string& msgid, MsgHandlerStrongRef sp_handler_obj, bool must_called_inmsgbusthread = true);
     void UnRegisterMsg(const std::string& msgid, IMsgHandler* p_handler_obj);
     // connect the netmsgbus server before do something related to netmsgbus.
     int  NetMsgBusConnectServer(const std::string& serverip, unsigned short int serverport);

@@ -40,7 +40,9 @@ namespace NetMsgBus
             }
             // 消息处理函数的调用类型，0代表在消息总线的同步消息处理线程中调用（和SendMsg的调用线程一致）
             // 1-代表该处理函数是一个耗时函数，因此会在放到线程池中调用
-            // 2-代表该函数是一个UI函数，需要在UI线程中处理
+            // 2-stand for this handler can be called safely in any thread.
+            // 3-代表该函数是一个UI函数，需要在UI线程中处理
+            //
             int type;
             HandlerT handler_func;
         };
@@ -94,7 +96,7 @@ namespace NetMsgBus
                 core::common::locker_guard guard(handlers_lock_);
                 all_handlers_[msgid] = hwrapper;
             }
-            RegisterMsg(msgid, this->shared_from_this());
+            RegisterMsg(msgid, this->shared_from_this(), type != 2);
         }
         void RemoveHandler(const std::string& msgid)
         {
