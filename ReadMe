@@ -1,2 +1,12 @@
 Make  all communication between modules , processes even machines as simple as sending message.
 Work for Mac and Linux.
+
+Performance:
+test machine:
+CPU: E5620 (8 core HT )
+Memory: 16G
+Network: 1000Mbit
+
+1. 100 concurrent , 4 tcp connection pool size, 100bytes request and 100bytes response.
+sync call for rpc using NetMsgBusGetData 
+TPS: 57K. Avg time: less than 2ms.
