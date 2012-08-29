@@ -10,7 +10,7 @@
 #include <stdio.h>
 
 #ifndef THREAD_POOL_MAX_THREAD
-#define THREAD_POOL_MAX_THREAD 64
+#define THREAD_POOL_MAX_THREAD 32
 #endif
 
 namespace threadpool

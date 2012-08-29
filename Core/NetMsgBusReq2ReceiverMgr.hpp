@@ -34,7 +34,7 @@ using namespace core::net;
 #define TIMEOUT_SHORT 5
 #define TIMEOUT_LONG  15
 #define MAX_SENDMSG_CLIENT_NUM  1024
-#define CLIENT_POOL_SIZE  10
+#define CLIENT_POOL_SIZE  4
 
 namespace NetMsgBus
 {
