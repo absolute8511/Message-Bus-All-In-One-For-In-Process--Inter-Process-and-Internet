@@ -22,6 +22,7 @@
 #include <sys/time.h>
 #include <boost/shared_array.hpp>
 #include <boost/bind.hpp>
+#include <boost/unordered_map.hpp>
 
 using std::string;
 #define TIMEOUT_SHORT 5
@@ -244,7 +245,7 @@ private:
             std::string msgcontent(pdata, data_len);
             //printf("got sendmsg data, syncflag:%d, sync_sid:%u, data_len:%d, string size:%ld.\n", (int)is_sync, sync_sid, data_len, msgcontent.size());
             // 身份验证,并过滤
-            std::map<int, std::string>::iterator senderit = m_client_senders.find(sp_tcp->GetFD());
+            boost::unordered_map<int, std::string>::iterator senderit = m_client_senders.find(sp_tcp->GetFD());
             if(senderit == m_client_senders.end())
             {
                 //printf("check sender identity:%lld\n", (int64_t)core::utility::GetTickCount());
@@ -320,7 +321,7 @@ private:
     int m_sendmsg_clientnum;
     unsigned short int m_localport;
     // record the validate sender name of the tcp from client 
-    std::map< int, std::string >  m_client_senders;
+    boost::unordered_map< int, std::string >  m_client_senders;
     static const int KEEP_ALIVE_TIME = 120000;
 };
 

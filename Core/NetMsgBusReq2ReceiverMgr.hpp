@@ -288,8 +288,9 @@ private:
             }
             if(ready_sendmsg_rsp)
             {
+                core::common::locker_guard guard(ready_sendmsg_rsp->wait_lock);
                 ready_sendmsg_rsp->ready = true;
-                ready_sendmsg_rsp->rsp_content = std::string(pdata, data_len);
+                ready_sendmsg_rsp->rsp_content.assign(pdata, pdata + data_len);
                 ready_sendmsg_rsp->wait_cond.notify_all();
             }
             size -= needlen;
@@ -385,13 +386,11 @@ private:
                 {
                     core::common::locker_guard guard(cur_sendmsg_rsp->wait_lock);
                     ready = cur_sendmsg_rsp->ready;
-                    //printf("one sync data waiter wakeup. sid:%d, ready:%d.\n", waiting_syncid, ready?1:0);
                     if(ready)
                     {
                         rsp_content = cur_sendmsg_rsp->rsp_content;
                         break;
                     }
-                    //printf("sid:%d sendmsg wake up for ready.\n", waiting_syncid);
                     int retcode = cur_sendmsg_rsp->wait_cond.waittime(cur_sendmsg_rsp->wait_lock, &ts);
                     if(retcode == ETIMEDOUT)
                     {
@@ -399,6 +398,12 @@ private:
                         //return false;
                         result = false;
                         rsp_content = "wait time out.";
+                        break;
+                    }
+                    ready = cur_sendmsg_rsp->ready;
+                    if(ready)
+                    {
+                        rsp_content = cur_sendmsg_rsp->rsp_content;
                         break;
                     }
                 }

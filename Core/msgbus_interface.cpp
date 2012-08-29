@@ -115,7 +115,7 @@ struct ReadySendMsgInfo
 };
 
 // 记录同步发送消息的结果,对应不同线程,唤醒对应的等待线程
-typedef std::map<pthread_t, boost::shared_ptr<ReadySendMsgInfo> >  ReadySendMsgResultT;
+typedef boost::unordered_map<pthread_t, boost::shared_ptr<ReadySendMsgInfo> >  ReadySendMsgResultT;
 ReadySendMsgResultT  s_ready_sendmsgs;
 core::common::condition s_ready_sendmsg_cond;
 core::common::locker  s_ready_sendmsg_locker;
@@ -313,6 +313,17 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
             {
                 g_log.Log(lv_warn, "sendmsg ready wakeup for timeout. msgid:%s.", msgid.c_str());
                 ret = false;
+                break;
+            }
+
+            ready = sp_readyinfo->ready;
+            //g_log.Log(lv_debug, "one sync data waiter wakeup in tid:%lld. msgid:%s, ready:%d.",
+            //   (uint64_t)callertid, msgid.c_str(), ready?1:0);
+            if(ready)
+            {
+                //g_log.Log(core::lv_debug, "process a sendmsg in msgbus finished:%lld\n", (int64_t)core::utility::GetTickCount());
+                param = sp_readyinfo->rspparam;
+                ret = sp_readyinfo->rspresult;
                 break;
             }
         }
