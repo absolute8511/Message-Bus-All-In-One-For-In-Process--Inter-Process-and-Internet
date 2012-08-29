@@ -292,6 +292,7 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
                         can_call_directly = false;
                         break;
                     }
+                    ++hit;
                 }
             }
             else
