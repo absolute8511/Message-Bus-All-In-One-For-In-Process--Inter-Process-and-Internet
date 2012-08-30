@@ -122,6 +122,7 @@ core::common::condition s_ready_sendmsg_cond;
 core::common::locker  s_ready_sendmsg_locker;
 
 static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks);
+static bool ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskQueue& alltasks, const MsgHandlerStrongObjList& msg_handlers);
 
 // 启动线程池以及消息处理线程
 bool InitMsgBus(long hmainwnd)
@@ -180,41 +181,8 @@ bool PostMsg(const std::string& msgid, boost::shared_array<char> param, uint32_t
     return PostMsg(msgid, MsgBusParam(param, paramlen));
 }
 
-// process message in msgbus thread 
-static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks)
+static bool ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskQueue& alltasks, const MsgHandlerStrongObjList& msg_handlers)
 {
-    //assert(pthread_equal(pthread_self(), msgbus_tid));
-    MsgHandlerStrongObjList msg_handlers;
-    // 先将该消息的处理对象队列的强引用拿出来
-    {
-        core::common::locker_guard guard(s_msghandlers_locker);
-        MsgHandlerObjContainerT::iterator it = s_all_msghandler_objs.find(msgid);
-        if( it != s_all_msghandler_objs.end() )
-        {
-            MsgHandlerWeakObjList& weak_msg_handlers = it->second;
-            MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
-            while(weakit != weak_msg_handlers.end())
-            {
-                MsgHandlerStrongRef sh = weakit->first.lock();
-                if(sh)
-                {
-                    // strong ref is validate
-                    msg_handlers.push_back(sh);
-                    ++weakit;
-                }
-                else
-                {
-                    // clear invalidate weakref.
-                    g_log.Log(lv_warn, "removing invalidate weak ref.");
-                    weakit = weak_msg_handlers.erase(weakit);
-                }
-            }
-            if(weak_msg_handlers.empty())
-            {
-                s_all_msghandler_objs.erase(it);
-            }
-        }
-    }
     bool result = false;
     int cnt = alltasks.size();
     while(cnt-- > 0)
@@ -257,7 +225,44 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
         //g_log.Log(core::lv_debug, "process a sendmsg in msgbus onmsg :%lld, cnt:%d \n", (int64_t)core::utility::GetTickCount(), cnt);
     }
     return result;
+}
 
+// process message in msgbus thread 
+static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks)
+{
+    assert(pthread_equal(pthread_self(), msgbus_tid));
+    MsgHandlerStrongObjList msg_handlers;
+    // 先将该消息的处理对象队列的强引用拿出来
+    {
+        core::common::locker_guard guard(s_msghandlers_locker);
+        MsgHandlerObjContainerT::iterator it = s_all_msghandler_objs.find(msgid);
+        if( it != s_all_msghandler_objs.end() )
+        {
+            MsgHandlerWeakObjList& weak_msg_handlers = it->second;
+            MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
+            while(weakit != weak_msg_handlers.end())
+            {
+                MsgHandlerStrongRef sh = weakit->first.lock();
+                if(sh)
+                {
+                    // strong ref is validate
+                    msg_handlers.push_back(sh);
+                    ++weakit;
+                }
+                else
+                {
+                    // clear invalidate weakref.
+                    g_log.Log(lv_warn, "removing invalidate weak ref.");
+                    weakit = weak_msg_handlers.erase(weakit);
+                }
+            }
+            if(weak_msg_handlers.empty())
+            {
+                s_all_msghandler_objs.erase(it);
+            }
+        }
+    }
+    ExecuteMsgBusHandlers(msgid, alltasks, msg_handlers);
 }
 // 同步处理，直接调用处理函数
 bool SendMsg(const std::string& msgid, MsgBusParam& param)
@@ -278,21 +283,39 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
     else 
     {
         bool can_call_directly = true;
+        MsgHandlerStrongObjList msg_handlers;
         {
             core::common::locker_guard guard(s_msghandlers_locker);
             MsgHandlerObjContainerT::iterator it = s_all_msghandler_objs.find(msgid);
             if(it != s_all_msghandler_objs.end())
             {
-                MsgHandlerWeakObjList::iterator hit = it->second.begin();
-                while(hit != it->second.end())
+                MsgHandlerWeakObjList& weak_msg_handlers = it->second;
+                MsgHandlerWeakObjList::iterator weakit = weak_msg_handlers.begin();
+                while(weakit != weak_msg_handlers.end())
                 {
-                    if( hit->second )
+                    if( weakit->second )
                     {
                         // must called by the msgbus thread, can not call directly.
                         can_call_directly = false;
                         break;
                     }
-                    ++hit;
+                    MsgHandlerStrongRef sh = weakit->first.lock();
+                    if(sh)
+                    {
+                        // strong ref is validate
+                        msg_handlers.push_back(sh);
+                        ++weakit;
+                    }
+                    else
+                    {
+                        // clear invalidate weakref.
+                        g_log.Log(lv_warn, "removing invalidate weak ref.");
+                        weakit = weak_msg_handlers.erase(weakit);
+                    }
+                }
+                if(weak_msg_handlers.empty())
+                {
+                    s_all_msghandler_objs.erase(it);
                 }
             }
             else
@@ -305,7 +328,7 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         {
             MsgTaskQueue taskqueue;
             taskqueue.push_back(MsgTask(msgid, param, callertid));
-            return SendMsgInMsgBusThread(msgid, taskqueue);
+            return ExecuteMsgBusHandlers(msgid, taskqueue, msg_handlers);
         }
     }
 

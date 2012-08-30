@@ -582,7 +582,7 @@ void testSyncGetData()
         testremotemsgbus_sync_sub(param);
         if(cnt % 500 == 0)
         {
-            printf("get net data success in thread:%llu, cnt:%d.\n", (uint64_t)pthread_self(), cnt);
+            printf("\rget net data success in thread:%llu, cnt:%d.", (uint64_t)pthread_self(), cnt);
         }
         if(cnt % 100 == 0)
         {
