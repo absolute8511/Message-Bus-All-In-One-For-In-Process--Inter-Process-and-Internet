@@ -122,7 +122,7 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
+        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
         //sleep(1);
         return true;
@@ -131,7 +131,7 @@ public:
     {
         printMsg(msgid, param, __FUNCTION__);
         GenerateNextTestParam(param);
-        NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
+        //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg2", param, SendUseServerRelay);
         //sleep(1);
         return true;
@@ -160,7 +160,7 @@ public:
     bool testCachedParam(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
         m_test_cached_param.push_back(param);
-        printf("caching param\n");
+        //printf("caching param\n");
         //sleep(1);
         return true;
     }
@@ -172,7 +172,7 @@ public:
         string longdata;
         xp.get_Int("testkey", value);
         xp.get_Str("testlongdata", longdata);
-        printf("process the (msg,param): (%s,%d,longdatasize:%zu) in %s , in thread:%lu.\n", msgid.c_str(), value, longdata.size(), func_name.c_str(), (unsigned long)pthread_self());
+        //printf("process the (msg,param): (%s,%d,longdatasize:%zu) in %s , in thread:%lu.\n", msgid.c_str(), value, longdata.size(), func_name.c_str(), (unsigned long)pthread_self());
         //m_counter++;
         //if(m_counter % 100 == 0)
         //{
@@ -187,14 +187,14 @@ public:
             Param2CustomType(m_test_cached_param[i], xp);
             int value = 0;
             xp.get_Int("testkey", value);
-            printf("test cached param : cached value (%d) \n", value);
+            //printf("test cached param : cached value (%d) \n", value);
         }
     }
     void InitMsgHandler()
     {
         m_counter = 0;
         AddHandler("msg_testMsgBus1", &MyMsgHandlerClass::testMsgBus1, 0);
-        AddHandler("msg_testMsgBus2", &MyMsgHandlerClass::testMsgBus2, 0);
+        AddHandler("msg_testMsgBus2", &MyMsgHandlerClass::testMsgBus2, 2);
         AddHandler("msg_testMsgBus3", &MyMsgHandlerClass::testMsgBus3, 0);
         AddHandler("msg_testCachedParam", &MyMsgHandlerClass::testCachedParam, 0);
 
@@ -237,12 +237,12 @@ public:
         Param2CustomType(param, xp);
         int value = 0;
         xp.get_Int("testkey", value);
-        printf("process the (msg,param): (%s,%d) in %s , in thread:%lu.\n", msgid.c_str(), value, func_name.c_str(), (unsigned long)pthread_self());
+        //printf("process the (msg,param): (%s,%d) in %s , in thread:%lu.\n", msgid.c_str(), value, func_name.c_str(), (unsigned long)pthread_self());
     }
     void InitMsgHandler()
     {
         AddHandler("msg_testMsgBus1", &MyMsgHandlerClass2::testMsgBus21, 0);
-        AddHandler("msg_testMsgBus2", &MyMsgHandlerClass2::testMsgBus22, 0);
+        AddHandler("msg_testMsgBus2", &MyMsgHandlerClass2::testMsgBus22, 2);
         AddHandler("msg_testMsgBus3", &MyMsgHandlerClass2::testMsgBus23, 1);
     }
 };
@@ -312,71 +312,97 @@ void testthreadpool()
     threadpool::queue_timer_task(boost::bind(func4,"12345677654321"),3,true);
     sleep(5);
 }
-void testlocalmsgbus()
+
+void testlocalmsgbus_sendmsg()
 {
-    sleep(1);
+    MyMsgHandlerClass2Ptr testmsgbus2;
+    MsgHandlerMgr::GetInstance(testmsgbus2);
+    core::XParam xp;
+    xp.put_Int("testkey", 13);
+    MsgBusParam param = CustomType2Param(xp);
+    int64_t starttime = utility::GetTickCount();
+    for(int cnt = 0; cnt < 1000; cnt++)
+    {
+        SendMsg("msg_testMsgBus3", param);
+        SendMsg("msg_testMsgBus1", param);
+        SendMsg("msg_testMsgBus2", param);
+        {
+            MyMsgHandlerClassPtr testmsgbus;
+            MsgHandlerMgr::GetInstance(testmsgbus);
+            SendMsg("msg_testCachedParam", param);
+            SendMsg("msg_testMsgBus2", param);
+            SendMsg("msg_testMsgBus3", param);
+            for(int i= 0; i < 10; i++)
+            {
+                SendMsg("msg_testMsgBus2", param);
+            }
+            SendMsg("msg_testMsgBus1", param);
+            testmsgbus->RemoveHandler("msg_testMsgBus1");
+            SendMsg("msg_testMsgBus1", param);
+            SendMsg("msg_testMsgBus2", param);
+        }
+        // sendmsg will change the param data.
+        SendMsg("msg_testMsgBus3", param);
+        SendMsg("msg_testMsgBus2", param);
+        SendMsg("msg_testMsgBus1", param);
+    }
+    int64_t endtime = utility::GetTickCount();
+    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
+}
+
+void testlocalmsgbus_postmsg()
+{
     MyMsgHandlerClass2Ptr testmsgbus2;
     MsgHandlerMgr::GetInstance(testmsgbus2);
     //MsgBusParam param = BuildinType2Param(13);
     core::XParam xp;
     xp.put_Int("testkey", 13);
     MsgBusParam param = CustomType2Param(xp);
-    SendMsg("msg_testMsgBus3", param);
-    /*GenerateNextTestParam(param);
-    PostMsg("msg_testMsgBus1", param);
-    GenerateNextTestParam(param);
-    PostMsg("msg_testMsgBus2", param);
-    GenerateNextTestParam(param);*/
+    int64_t starttime = utility::GetTickCount();
+    for(int cnt = 0; cnt < 10000; cnt++)
     {
-        SendMsg("msg_testMsgBus1", param);
-        GenerateNextTestParam(param);
-        PostMsg("msg_testMsgBus1", param);
-        GenerateNextTestParam(param);
-        PostMsg("msg_testMsgBus2", param);
-        GenerateNextTestParam(param);
-        MyMsgHandlerClassPtr testmsgbus;
-        MsgHandlerMgr::GetInstance(testmsgbus);
-        SendMsg("msg_testCachedParam", param);
-        GenerateNextTestParam(param);
-        SendMsg("msg_testMsgBus2", param);
-        GenerateNextTestParam(param);
         SendMsg("msg_testMsgBus3", param);
-        for(int i= 0; i < 30; i++)
-        {
-            GenerateNextTestParam(param);
-            PostMsg("msg_testMsgBus2", param);
-        }
-        sleep(3);
-        GenerateNextTestParam(param);
-        PostMsg("msg_testCachedParam", param);
-        GenerateNextTestParam(param);
-        SendMsg("msg_testMsgBus1", param);
-        GenerateNextTestParam(param);
+        PostMsg("msg_testMsgBus1", param);
         PostMsg("msg_testMsgBus2", param);
-        GenerateNextTestParam(param);
-        PostMsg("msg_testMsgBus3", param);
-        GenerateNextTestParam(param);
-        sleep(3);
-        printAllMsgHandler("msg_testMsgBus1");
-        testmsgbus->RemoveHandler("msg_testMsgBus1");
+        {
+            SendMsg("msg_testMsgBus1", param);
+            //GenerateNextTestParam(param);
+            PostMsg("msg_testMsgBus1", param);
+            //GenerateNextTestParam(param);
+            PostMsg("msg_testMsgBus2", param);
+            //GenerateNextTestParam(param);
+            MyMsgHandlerClassPtr testmsgbus;
+            MsgHandlerMgr::GetInstance(testmsgbus);
+            SendMsg("msg_testCachedParam", param);
+            //GenerateNextTestParam(param);
+            SendMsg("msg_testMsgBus2", param);
+            //GenerateNextTestParam(param);
+            SendMsg("msg_testMsgBus3", param);
+            for(int i= 0; i < 10; i++)
+            {
+                //GenerateNextTestParam(param);
+                PostMsg("msg_testMsgBus2", param);
+            }
+            PostMsg("msg_testCachedParam", param);
+            SendMsg("msg_testMsgBus1", param);
+            PostMsg("msg_testMsgBus2", param);
+            PostMsg("msg_testMsgBus3", param);
+            //printAllMsgHandler("msg_testMsgBus1");
+            testmsgbus->RemoveHandler("msg_testMsgBus1");
+            SendMsg("msg_testMsgBus1", param);
+            SendMsg("msg_testMsgBus2", param);
+            //testmsgbus->printCachedParam();
+        }
+        PostMsg("msg_testMsgBus2", param);
         SendMsg("msg_testMsgBus1", param);
-        GenerateNextTestParam(param);
-        SendMsg("msg_testMsgBus2", param);
-        GenerateNextTestParam(param);
-        testmsgbus->printCachedParam();
+        // sendmsg will change the param data.
+        SendMsg("msg_testMsgBus3", param);
+        PostMsg("msg_testMsgBus2", param);
+        SendMsg("msg_testMsgBus1", param);
+        //printAllMsgHandler("msg_testMsgBus1");
     }
-    /*PostMsg("msg_testMsgBus2", param);
-    GenerateNextTestParam(param);
-    SendMsg("msg_testMsgBus1", param);
-    GenerateNextTestParam(param);
-    // sendmsg will change the param data.
-    SendMsg("msg_testMsgBus3", param);*/
-    GenerateNextTestParam(param);
-    PostMsg("msg_testMsgBus2", param);
-    GenerateNextTestParam(param);
-    SendMsg("msg_testMsgBus1", param);
-    printAllMsgHandler("msg_testMsgBus1");
-    sleep(2);
+    int64_t endtime = utility::GetTickCount();
+    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
 }
 
 void testremotemsgbus_broadcast_sub(MsgBusParam& param, const std::string& longdata)
@@ -594,6 +620,27 @@ void testSyncGetData()
     g_log.Log(lv_warn, "get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
 }
 
+void testconcurrent_local()
+{
+    threadpool::task_type t = boost::bind(testlocalmsgbus_sendmsg);
+    for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
+    {
+        threadpool::queue_work_task(t, 1);
+    }
+    //threadpool::task_type t2 = boost::bind(testlocalmsgbus_postmsg);
+    //for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
+    //{
+    //    threadpool::queue_work_task(t2, 1);
+    //}
+    while(true)
+    {
+        if(s_break)
+            break;
+        sleep(1);
+    }
+
+}
+
 void testXParam()
 {
     using namespace core;
@@ -790,8 +837,8 @@ int main()
     //testeventloop();
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
-    //testlocalmsgbus();
-    testremotemsgbus();
+    testconcurrent_local();
+    //testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     DestroyMsgBus();
