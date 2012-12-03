@@ -21,6 +21,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.server_port = server_port
         self.buffer = ''
         self.last_active = time.time()
+        self.need_stop = False
+        self.is_closed = False
         self.RegisterNetMsgBusReceiver(receiver_ip, receiver_port, receiver_name, kServerBusyState.LOW)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         log.debug('connecting to %s', server_ip)
@@ -28,6 +30,10 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def doloop(self):
         asyncore.loop(timeout=1, count=1)
+        if self.need_stop:
+            self.close()
+            self.is_closed = True
+            return
         if(time.time() - self.last_active > 45):
             log.debug('sending keep alive heart ...')
             self.ConfirmAlive()
@@ -37,10 +43,11 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.close()
         self.create_socket(AF_INET, SOCK_STREAM)
         log.debug('reconnecting to %s', self.server_ip)
+        self.is_closed = False
         self.connect(self.server_ip, self.server_port)
 
     def disconnect(self):
-        self.close()
+        self.need_stop = True
         log.debug('disconnect to %s', self.server_ip)
 
     def handle_connect(self):
@@ -48,6 +55,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def handle_close(self):
         self.close()
+        self.is_closed = True
         log.info('server %s closed', self.server_ip)
 
     def handle_read(self):
@@ -69,6 +77,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def handle_error(self):
         self.close()
+        self.is_closed = True
         log.error('netmsgbus server connection has error')
         
     def RegisterNetMsgBusReceiver(self, clientip, clientport, clientname, busy_state = kServerBusyState.LOW):
@@ -105,14 +114,14 @@ class ServerConnectionRunner(threading.Thread):
         self.servermgr = servermgr
 
     def run(self):
-        while not self.servermgr.closing:
+        while not self.servermgr.is_closed:
             self.servermgr.doloop()
 
 test = NetMsgBusServerConnMgr('127.0.0.1', 19000, '', 9100, 'test.receiverclient_A')
 bg = ServerConnectionRunner(test)
 bg.start()
 #thread.start_new_thread(asyncore.loop, ())
-bg.join(100)
+bg.join(50)
 test.disconnect()
 log.debug('stopping ...')
 bg.join()
