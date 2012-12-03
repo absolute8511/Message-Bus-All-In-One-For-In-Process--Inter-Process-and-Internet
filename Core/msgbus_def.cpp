@@ -371,7 +371,7 @@ void MsgBusConfirmAliveRsp::PackBody(char *data, size_t len)
     if( (len != 0) && (len < (Size() - MsgBusPackHeadRsp::Size())))
         throw;
     char *p = data;
-    *((uint16_t *)p) = ret_code;
+    *((uint16_t *)p) = htons(ret_code);
 }
 void MsgBusConfirmAliveRsp::PackData(char *data, size_t len)
 {

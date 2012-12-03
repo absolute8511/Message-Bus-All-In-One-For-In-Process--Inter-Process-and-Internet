@@ -348,6 +348,7 @@ void testlocalmsgbus_sendmsg()
     }
     int64_t endtime = utility::GetTickCount();
     g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
+    printf("finished local message bus test.\n");
 }
 
 void testlocalmsgbus_postmsg()
@@ -403,6 +404,7 @@ void testlocalmsgbus_postmsg()
     }
     int64_t endtime = utility::GetTickCount();
     g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
+    printf("finished local message bus test.\n");
 }
 
 void testremotemsgbus_broadcast_sub(MsgBusParam& param, const std::string& longdata)
@@ -837,8 +839,8 @@ int main()
     //testeventloop();
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
-    testconcurrent_local();
-    //testremotemsgbus();
+    //testconcurrent_local();
+    testremotemsgbus();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     DestroyMsgBus();

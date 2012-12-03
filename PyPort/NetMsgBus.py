@@ -76,7 +76,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.receiver_name = clientname
         self.busy_state = busy_state
         host = ClientHost()
-        host.server_ip = 0
+        host.server_ip = ''
         if clientip != '' :
             host.server_ip = socket.inet_aton(clientip)
         host.server_port = clientport
@@ -93,7 +93,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         print "".join('%#04x' % ord(c) for c in outbuffer)
         self.buffer = self.buffer + outbuffer 
 
-test = NetMsgBusServerConnMgr('127.0.0.1', 19000, '127.0.0.1', 9200, 'receiver.test')
+test = NetMsgBusServerConnMgr('127.0.0.1', 19000, '', 9100, 'test.receiverclient_A')
 asyncore.loop()
 #thread.start_new_thread(asyncore.loop, ())
 

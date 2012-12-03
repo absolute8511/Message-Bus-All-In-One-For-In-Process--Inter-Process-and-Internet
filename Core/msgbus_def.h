@@ -38,7 +38,7 @@ enum kMsgBusBodyType {
 };
 
 typedef struct S_ClientHostInfo {
-    S_ClientHostInfo(unsigned long int ip, unsigned short int port)
+    S_ClientHostInfo(uint32_t ip, unsigned short int port)
         :server_ip(ip),
         server_port(port),
         busy_state(LOW)
@@ -50,7 +50,7 @@ typedef struct S_ClientHostInfo {
         busy_state(LOW)
     {
     }
-    unsigned long int  server_ip;
+    uint32_t  server_ip;
     unsigned short int server_port;
     kServerBusyState  busy_state;
 } ClientHost;

@@ -31,7 +31,7 @@ class ClientHost:
         self.server_port = port
         self.busy_state = 0
     def pack(self):
-        return self.server_ip + struct.pack('!Hi', self.server_port, self.busy_state)
+        return self.server_ip.ljust(4, '\0') + struct.pack('!Hi', self.server_port, self.busy_state)
     def unpack(self, data):
         self.server_ip = data[:4]
         (self.server_port, self.busy_state) = struct.unpack_from('!Hi', data, 4)
@@ -86,7 +86,7 @@ class MsgBusRegisterReq(MsgBusPackHeadReq):
         self.service_host = ClientHost()
 
     def PackBody(self):
-        return struct.pack('!' + MAX_SERVICE_NAME_STR + 's', self.service_name) + self.service_host.pack()
+        return struct.pack('!' + MAX_SERVICE_NAME_STR + 's', self.service_name.ljust(MAX_SERVICE_NAME, '\0')) + self.service_host.pack()
 
     def PackData(self):
         self.body_len = self.BodySize()
