@@ -187,7 +187,7 @@ class MsgBusConfirmAliveReq(MsgBusPackHeadReq):
         self.UnPackBody(data[self.ReqHeadSize():])
 
     def BodySize(self):
-        return struct.calcsize('!B') + MsgBusPackHeadReq.Size()
+        return struct.calcsize('!B')
 
 class MsgBusConfirmAliveRsp(MsgBusPackHeadRsp):
     def __init__(self):
