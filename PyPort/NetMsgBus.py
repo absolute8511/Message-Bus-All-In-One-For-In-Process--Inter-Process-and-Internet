@@ -17,12 +17,25 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def __init__(self, server_ip, server_port, receiver_ip, receiver_port, receiver_name):
         asyncore.dispatcher.__init__(self)
+        self.rsp_handlers = {
+                kMsgBusBodyType.RSP_CONFIRM_ALIVE : lambda x : self.HandleRspConfirmAlive(x),
+                kMsgBusBodyType.RSP_REGISTER : lambda x : self.HandleRspRegister(x),
+                kMsgBusBodyType.RSP_UNREGISTER : lambda x : self.HandleRspUnRegister(x),
+                #kMsgBusBodyType.RSP_GETCLIENT : HandleRspGetClient,
+                #kMsgBusBodyType.RSP_SENDMSG : HandleRspSendMsg,
+                #kMsgBusBodyType.REQ_SENDMSG : HandleReqSendMsg,
+                #kMsgBusBodyType.BODY_PBTYPE : HandleRspPBBody,
+                kMsgBusBodyType.UNKNOWN_BODY : lambda x : self.HandleUnknown(x)
+        }
+
         self.server_ip = server_ip
         self.server_port = server_port
         self.buffer = ''
         self.last_active = time.time()
         self.need_stop = False
         self.is_closed = False
+        self.isreceiver_registered = False
+        self.receiver_name = ''
         self.RegisterNetMsgBusReceiver(receiver_ip, receiver_port, receiver_name, kServerBusyState.LOW)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         log.debug('connecting to %s', server_ip)
@@ -61,7 +74,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
     def handle_read(self):
         self.last_active = time.time()
         log.debug('begin read data from netmsgbus server')
-        print self.recv(8192)
+        self.ReceivePack()
 
     def readable(self):
         return True
@@ -80,6 +93,41 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.is_closed = True
         log.error('netmsgbus server connection has error')
         
+    def ReceivePack(self):
+        head = MsgBusPackHead()
+        log.debug('reading pack head : %d ', head.HeadSize())
+        headbuffer = self.recv(head.HeadSize())
+        if not head.UnPackHead(headbuffer):
+            log.error('unpack head error.')
+            return
+        bodybuffer = self.recv(head.body_len)
+        log.debug('received pack type : %d, len:%d ', head.body_type, head.body_len)
+        self.rsp_handlers.get(head.body_type, kMsgBusBodyType.UNKNOWN_BODY)(bodybuffer)
+
+    def HandleRspConfirmAlive(self, bodybuffer):
+        rsp = MsgBusConfirmAliveRsp()
+        rsp.UnPackBody(bodybuffer)
+        if(rsp.ret_code != 0):
+            print "".join('%#04x' % ord(c) for c in bodybuffer)
+            log.error("confirm alive not confirmed. ret_code: %d", rsp.ret_code)
+
+    def HandleRspRegister(self, bodybuffer):
+        reg_rsp = MsgBusRegisterRsp()
+        reg_rsp.UnPackBody(bodybuffer)
+        if(reg_rsp.ret_code == 0):
+            self.isreceiver_registered = True
+            self.receiver_name = reg_rsp.service_name
+            log.info('netmsgbus receiver register success : %s', self.receiver_name)
+        else:
+            self.isreceiver_registered = False;
+            log.info('netmsgbus receiver register failed: %s', reg_rsp.service_name)
+
+    def HandleRspUnRegister(self, bodybuffer):
+        log.info('unregister rsp from server.')
+
+    def HandleUnknown(self, bodybuffer):
+        log.error('got unknown body from netmsgbus server.')
+
     def RegisterNetMsgBusReceiver(self, clientip, clientport, clientname, busy_state = kServerBusyState.LOW):
         self.receiver_ip = clientip
         self.receiver_port = clientport
@@ -125,6 +173,4 @@ bg.join(50)
 test.disconnect()
 log.debug('stopping ...')
 bg.join()
-
-
 
