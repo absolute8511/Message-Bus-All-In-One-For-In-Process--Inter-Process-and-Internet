@@ -18,14 +18,14 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
     def __init__(self, server_ip, server_port, receiver_ip, receiver_port, receiver_name):
         asyncore.dispatcher.__init__(self)
         self.rsp_handlers = {
-                kMsgBusBodyType.RSP_CONFIRM_ALIVE : lambda x : self.HandleRspConfirmAlive(x),
-                kMsgBusBodyType.RSP_REGISTER : lambda x : self.HandleRspRegister(x),
-                kMsgBusBodyType.RSP_UNREGISTER : lambda x : self.HandleRspUnRegister(x),
-                #kMsgBusBodyType.RSP_GETCLIENT : HandleRspGetClient,
-                #kMsgBusBodyType.RSP_SENDMSG : HandleRspSendMsg,
-                #kMsgBusBodyType.REQ_SENDMSG : HandleReqSendMsg,
-                #kMsgBusBodyType.BODY_PBTYPE : HandleRspPBBody,
-                kMsgBusBodyType.UNKNOWN_BODY : lambda x : self.HandleUnknown(x)
+                kMsgBusBodyType.RSP_CONFIRM_ALIVE : self.HandleRspConfirmAlive,
+                kMsgBusBodyType.RSP_REGISTER : self.HandleRspRegister,
+                kMsgBusBodyType.RSP_UNREGISTER : self.HandleRspUnRegister,
+                kMsgBusBodyType.RSP_GETCLIENT : self.HandleRspGetClient,
+                kMsgBusBodyType.RSP_SENDMSG : self.HandleRspSendMsg,
+                kMsgBusBodyType.REQ_SENDMSG : self.HandleReqSendMsg,
+                kMsgBusBodyType.BODY_PBTYPE : self.HandleRspPBBody,
+                kMsgBusBodyType.UNKNOWN_BODY : self.HandleUnknown
         }
 
         self.server_ip = server_ip
@@ -125,6 +125,53 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
     def HandleRspUnRegister(self, bodybuffer):
         log.info('unregister rsp from server.')
 
+    def HandleRspGetClient(self, bodybuffer):
+        rsp = MsgBusGetClientRsp()
+        rsp.UnPackBody(bodybuffer)
+        if rsp.ret_code == 0:
+            dest_ip = socket.inet_ntoa(rsp.dest_host.server_ip)
+            dest_port = rsp.dest_host.server_port
+            dest_clientname = rsp.dest_name
+            log.info('get client info returned. ret name: %s, ip:port : %s:%d', dest_clientname, dest_ip, dest_port)
+            #    core::common::locker_guard guard(m_cached_receiver_locker);
+            #    m_cached_client_info[clientname] = hostinfo;
+            #
+        else:
+            log.info('msgbus server return error while get client info, ret_code: %d.', rsp.ret_code)
+
+    def HandleRspSendMsg(self, bodybuffer):
+        #本客户端通过服务器向其他客户端转发消息得到的服务器返回确认
+        rsp = MsgBusSendMsgRsp()
+        rsp.UnPackBody(bodybuffer)
+        if rsp.ret_code == 0:
+            log.debug('send message using server relay return success.')
+        else:
+            log.info('send msg by server error: %d, errmsg: %s.', rsp.ret_code, rsp.GetErrMsg())
+        
+    def HandleReqSendMsg(self, bodybuffer):
+        #收到服务器转发的其他客户端的发消息请求
+        req = MsgBusSendMsgReq()
+        req.UnPackBody(bodybuffer)
+        log.info('got message from server relay, from:%s, dest:%s, msgid:%d.', req.from_name, req.dest_name, req.msg_id)
+        log.info('message content:%s.', req.GetMsgContent())
+        #NetMsgBusToLocalMsgBus(req.GetMsgContent());
+
+    def HandleRspPBBody(self, bodybuffer):
+        log.debug('pbbody response:%s', bodybuffer)
+        pbpack = MsgBusPackPBType()
+        pbpack.UnPackBody(bodybuffer)
+        log.debug('pbtype:%s, pbdata:%s.', pbpack.GetPBType(), pbpack.GetPBData())
+
+        #PBHandlerContainerT::const_iterator cit = m_pb_handlers.find(pbtype);
+        #if(cit != m_pb_handlers.end())
+        #{
+        #    cit->second->onPbData(pbtype, pbdata);
+        #}
+        #else
+        #{
+        #    g_log.Log(lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
+        #}
+
     def HandleUnknown(self, bodybuffer):
         log.error('got unknown body from netmsgbus server.')
 
@@ -140,21 +187,76 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         host.server_port = clientport
         host.busy_state = busy_state
 
-        if( not self.connected):
+        if not self.connected:
             log.info('netmsgbus server is not connecting. Register will be done after connected')
 
         reg_req = MsgBusRegisterReq() 
         reg_req.service_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         reg_req.service_host = host
-        outbuffer = reg_req.PackData()
         #log.debug('Register pack len: %d', len(outbuffer))
         #print "".join('%#04x' % ord(c) for c in outbuffer)
-        self.buffer = self.buffer + outbuffer 
+        self.buffer += reg_req.PackData() 
+        return True
+
+    def UnRegisterNetMsgBusReceiver(self):
+        if not self.connected:
+            return False
+        unreg_req = MsgBusUnRegisterReq()
+        unreg_req.service_name = self.receiver_name.ljust(MAX_SERVICE_NAME, '\0')
+        host = ClientHost()
+        host.server_ip = ''
+        if self.receiver_ip != "":
+            host.server_ip = socket.inet_aton(self.receiver_ip)
+        host.server_port = self.receiver_port
+        unreg_req.service_host = host
+        self.buffer += unreg_req.PackData()
+        self.isreceiver_registered = False
+        return True
 
     def ConfirmAlive(self):
-        req = MsgBusConfirmAliveReq();
-        req.alive_flag = 0;
-        self.buffer = self.buffer + req.PackData();
+        req = MsgBusConfirmAliveReq()
+        req.alive_flag = 0
+        self.buffer += req.PackData()
+
+    def PostNetMsgUseServerRelay(self, clientname, data):
+        if not self.connected:
+            return False
+        sendmsg_req = MsgBusSendMsgReq()
+        sendmsg_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
+        sendmsg_req.from_name = self.receiver_name.ljust(MAX_SERVICE_NAME, '\0')
+        #sendmsg_req.msg_id = (uint32_t)core::utility::GetTickCount()
+        log.debug('server tick msgid %d, sendmsg use server relay from:%s, to:%s.', sendmsg_req.msg_id, sendmsg_req.from_name, sendmsg_req.dest_name);
+        sendmsg_req.SetMsgContent(data)
+        self.buffer += sendmsg_req.PackData()
+        return True
+
+    def ReqReceiverInfo(self, clientname):
+        if not self.connected:
+            return False
+        get_client_req = MsgBusGetClientReq()
+        get_client_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
+        self.buffer += get_client_req.PackData()
+        return True
+
+    def QueryAvailableServices(self, match_str):
+        if not self.connected:
+            return False
+        services_query = MsgBusPackPBType()
+        #PBQueryServicesReq pbreq;
+        #pbreq.set_match_prefix(match_str);
+        #std::string pbtype = PBQueryServicesReq::descriptor()->full_name();
+        #services_query.pbtype_len = pbtype.size() + 1;
+        #pbtype.push_back('\0');
+        #int pbsize = pbreq.ByteSize();
+        #boost::shared_array<char> pbdata(new char[pbsize]);
+        #pbreq.SerializeToArray(pbdata.get(), pbsize);
+        #services_query.pbdata_len = pbsize;
+        pbtype = 'testpb'
+        pbdata = 'testpbdata'
+        services_query.SetPBTypeAndData(pbtype, pbdata)
+        self.buffer += services_query.PackData()
+        return True
+
 
 class ServerConnectionRunner(threading.Thread):
     def __init__(self, servermgr):
@@ -169,7 +271,13 @@ test = NetMsgBusServerConnMgr('127.0.0.1', 19000, '', 9100, 'test.receiverclient
 bg = ServerConnectionRunner(test)
 bg.start()
 #thread.start_new_thread(asyncore.loop, ())
-bg.join(50)
+bg.join(10)
+test.ReqReceiverInfo('test.receiverclient_B')
+test.PostNetMsgUseServerRelay('test.receiverclient_B', 'msgid=test.postmsg')
+bg.join(5)
+log.debug('unregister ...')
+test.UnRegisterNetMsgBusReceiver()
+bg.join(5)
 test.disconnect()
 log.debug('stopping ...')
 bg.join()
