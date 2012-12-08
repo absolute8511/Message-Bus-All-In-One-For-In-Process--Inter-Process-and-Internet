@@ -374,9 +374,9 @@ class MsgBusPackPBType(MsgBusPackHead):
         return self.PackHead() + self.PackBody()
 
     def UnPackBody(self, data):
-        (self.pbtype_len, self.pbdata_len) = struct.unpack('!ii', data, 0)
+        (self.pbtype_len, self.pbdata_len) = struct.unpack_from('!ii', data, 0)
         used_size = struct.calcsize('!ii')
-        (self.pbtype, self.pbdata) = struct.unpack('!' + str(self.pbtype_len) + 's' + str(self.pbdata_len) + 's', data, used_size)
+        (self.pbtype, self.pbdata) = struct.unpack_from('!' + str(self.pbtype_len) + 's' + str(self.pbdata_len) + 's', data, used_size)
 
     def UnPackData(self, data):
         self.UnPackHead(data)
@@ -406,8 +406,8 @@ class MsgBusPackPBType(MsgBusPackHead):
         else:
             raise 'pbdata is not string type'
 
-        pbtype_len = len(self.pbtype)
-        pbdata_len = len(self.pbdata)
+        self.pbtype_len = len(self.pbtype)
+        self.pbdata_len = len(self.pbdata)
 
     #int32_t   pbtype_len;
     #int32_t   pbdata_len;

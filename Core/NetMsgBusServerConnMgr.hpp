@@ -295,6 +295,7 @@ public:
             g_log.Log(lv_debug, "filter by sender: %s while got message from server relay.", req.from_name);
             return;
         }
+        g_log.Log(lv_debug, "got message from server relay. from: %s, content:%s, msgid:%d", req.from_name, req.GetMsgContent(), req.msg_id);
         std::string msg_str(req.GetMsgContent(), req.msg_len);
         NetMsgBusToLocalMsgBus(msg_str);
     }

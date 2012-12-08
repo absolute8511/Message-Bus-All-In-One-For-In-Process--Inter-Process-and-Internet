@@ -549,28 +549,29 @@ void testremotemsgbus()
         sleep(3);
         int mintimeout = 3;
 
-        threadpool::task_type t = boost::bind(testSyncGetData);
-        for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
-        {
-            threadpool::queue_work_task(t, 1);
-        }
+        //threadpool::task_type t = boost::bind(testSyncGetData);
+        //for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
+        //{
+        //    threadpool::queue_work_task(t, 1);
+        //}
         printf(" in main start\n ");
         int64_t starttime = utility::GetTickCount();
         while(true)
         {
             if(s_break)
                 break;
-            //testremotemsgbus_broadcast_sub(param, longdata);
+            testremotemsgbus_broadcast_sub(param, longdata);
             //testremotemsgbus_direct_sub(param, longdata);
-            //testremotemsgbus_relay_sub(param, longdata);
+            testremotemsgbus_relay_sub(param, longdata);
             
             sendcounter++;
-            if(sendcounter % 100 == 0)
+            if(sendcounter % 10 == 0)
             {
                 printf(" in main {%d}\n ", sendcounter);
-                if(sendcounter >= 10000)
+                if(sendcounter >= 100)
                     break;
             }
+            sleep(1);
             //testremotemsgbus_sync_sub(param);            
         }
         printf("\n");

@@ -750,10 +750,10 @@ void MsgBusPackPBType::PackBody(char *data, size_t len)
     char *p = data;
     *((int32_t*)p) = htonl(pbtype_len);
     p += sizeof(pbtype_len);
-    strncpy(p, pbtype, pbtype_len);
-    p += pbtype_len;
     *((int32_t*)p) = htonl(pbdata_len);
     p += sizeof(pbdata_len);
+    strncpy(p, pbtype, pbtype_len);
+    p += pbtype_len;
     memcpy(p, pbdata, pbdata_len);
 }
 
@@ -774,10 +774,14 @@ int MsgBusPackPBType::UnPackBody(const char *data, size_t len)
         throw;
     const char *p = data;
     try{
-    pbtype_len = ntohl(*((uint32_t*)p));
+    pbtype_len = ntohl(*((int32_t*)p));
     p += sizeof(pbtype_len);
     if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len) )
         return -1;
+    pbdata_len = ntohl(*((int32_t*)p));
+    if( (len != 0) && (len < (Size() - MsgBusPackHead::Size())))
+        return -1;
+    p += sizeof(pbdata_len);
 
     FreeVarData();
     needfree = true;
@@ -787,10 +791,6 @@ int MsgBusPackPBType::UnPackBody(const char *data, size_t len)
     p += pbtype_len;
     if( (len != 0) && (len < sizeof(pbtype_len) + pbtype_len + sizeof(pbdata_len)) )
         return -1;
-    pbdata_len = ntohl(*((uint32_t*)p));
-    if( (len != 0) && (len < (Size() - MsgBusPackHead::Size())))
-        return -1;
-    p += sizeof(pbdata_len);
     pbdata = new char[pbdata_len];
     memcpy(pbdata, p, pbdata_len);
     return 0;
