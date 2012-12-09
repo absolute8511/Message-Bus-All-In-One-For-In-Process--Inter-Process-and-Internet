@@ -33,6 +33,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
                 'unknown_pbtype' : self.HandlePBUnknown
                 }
 
+        self.writelocker = threading.Lock()
         self.server_ip = server_ip
         self.server_port = server_port
         self.buffer = ''
@@ -89,8 +90,9 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def handle_write(self):
         log.debug('begin write data to netmsgbus server')
-        sent = self.send(self.buffer)
-        self.buffer = self.buffer[sent:]
+        with self.writelocker:
+            sent = self.send(self.buffer)
+            self.buffer = self.buffer[sent:]
         self.last_active = time.time()
 
     def handle_error(self):
@@ -164,7 +166,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
     def HandleRspPBBody(self, bodybuffer):
         pbpack = MsgBusPackPBType()
         pbpack.UnPackBody(bodybuffer)
-        log.debug('pbtype:%s, pbdata:%s.', pbpack.GetPBType(), pbpack.GetPBData())
+        log.debug('got pbrsp, pbtype:%s.', pbpack.GetPBType())
         self.pbdata_handlers.get(pbpack.GetPBType().rstrip('\0'), self.HandlePBUnknown)(pbpack.GetPBData())
 
     def HandleUnknown(self, bodybuffer):
@@ -198,7 +200,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         reg_req.service_host = host
         #log.debug('Register pack len: %d', len(outbuffer))
         #print "".join('%#04x' % ord(c) for c in outbuffer)
-        self.buffer += reg_req.PackData() 
+        with self.writelocker:
+            self.buffer += reg_req.PackData() 
         return True
 
     def UnRegisterNetMsgBusReceiver(self):
@@ -212,14 +215,16 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             host.server_ip = socket.inet_aton(self.receiver_ip)
         host.server_port = self.receiver_port
         unreg_req.service_host = host
-        self.buffer += unreg_req.PackData()
+        with self.writelocker:
+            self.buffer += unreg_req.PackData()
         self.isreceiver_registered = False
         return True
 
     def ConfirmAlive(self):
         req = MsgBusConfirmAliveReq()
         req.alive_flag = 0
-        self.buffer += req.PackData()
+        with self.writelocker:
+            self.buffer += req.PackData()
 
     def PostNetMsgUseServerRelay(self, clientname, data):
         if not self.connected:
@@ -230,7 +235,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         sendmsg_req.msg_id = int(time.time())
         log.debug('server tick msgid %d, sendmsg use server relay from:%s, to:%s.', sendmsg_req.msg_id, sendmsg_req.from_name, sendmsg_req.dest_name);
         sendmsg_req.SetMsgContent(data)
-        self.buffer += sendmsg_req.PackData()
+        with self.writelocker:
+            self.buffer += sendmsg_req.PackData()
         return True
 
     def ReqReceiverInfo(self, clientname):
@@ -238,7 +244,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             return False
         get_client_req = MsgBusGetClientReq()
         get_client_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
-        self.buffer += get_client_req.PackData()
+        with self.writelocker:
+            self.buffer += get_client_req.PackData()
         return True
 
     def QueryAvailableServices(self, match_str):
@@ -251,8 +258,9 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         pbtype += '\0';
         services_query.SetPBTypeAndData(pbtype, pbreq.SerializeToString())
         log.debug('begin query all available services. %s, pbtype:%s, pbdata len:%d', match_str, pbtype, len(pbreq.SerializeToString()))
-        self.buffer += services_query.PackData()
-        print "".join('%#04x' % ord(c) for c in services_query.PackData())
+        with self.writelocker:
+            self.buffer += services_query.PackData()
+        #print "".join('%#04x' % ord(c) for c in services_query.PackData())
         return True
 
 class ServerConnectionRunner(threading.Thread):
