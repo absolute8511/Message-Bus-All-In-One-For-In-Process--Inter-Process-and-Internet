@@ -415,6 +415,68 @@ class MsgBusPackPBType(MsgBusPackHead):
     #char*     pbdata;
 
 
+class ReceiverSendMsgReq:
+    def __init__(self):
+        self.is_sync = 0
+        self.sync_sid = 0 # uint32_t
+        self.data_len = 0 # uint32_t
+        self.data = ''
+
+    def PackData(self):
+        return struct.pack('!BII' + str(self.data_len) + 's', self.is_sync, self.sync_sid, self.data_len, self.data)
+
+    def UnPackHead(self, data):
+        (self.is_sync, self.sync_sid, self.data_len) = struct.unpack_from('!BII', data, 0)
+
+    def UnPackBody(self, data):
+        (self.data, ) = struct.unpack_from('!' + str(self.data_len) + 's', data, 0)
+
+    def UnPackData(self, data):
+        self.UnPackHead(data)
+        self.UnPackBody(data[self.HeadSize():])
+
+    def HeadSize(self):
+        return struct.calcsize('!BII')
+
+    def SetMsgData(self, data):
+        self.data_len = len(data)
+        self.data = data
+
+    def CheckMsgId(self):
+        return ''
+
+    def CheckMsgSender(self):
+        return ''
+
+    def GetMsgParam(self):
+        return ''
+
+class ReceiverSendMsgRsp:
+    def __init__(self):
+        self.sync_sid = 0 # uint32_t
+        self.data_len = 0 # uint32_t
+        self.data = ''
+
+    def PackData(self):
+        return struct.pack('!II' + str(self.data_len) + 's', self.sync_sid, self.data_len, self.data)
+
+    def UnPackHead(self, data):
+        (self.sync_sid, self.data_len) = struct.unpack_from('!II', data, 0)
+
+    def UnPackBody(self, data):
+        (self.data, ) = struct.unpack_from('!' + str(self.data_len) + 's', data, 0)
+
+    def UnPackData(self, data):
+        self.UnPackHead(data)
+        self.UnPackBody(data[self.HeadSize():])
+
+    def HeadSize(self):
+        return struct.calcsize('!II')
+
+    def SetRspData(self, data):
+        self.data_len = len(data)
+        self.data = data
+
 def ClientHostIsEqual(left, right):
     return (left.server_ip == right.server_ip) and (left.server_port == right.server_port)
 
