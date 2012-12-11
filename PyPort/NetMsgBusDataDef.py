@@ -415,6 +415,50 @@ class MsgBusPackPBType(MsgBusPackHead):
     #char*     pbdata;
 
 
+
+class ReceiverMsgUtil:
+    @staticmethod
+    def EncodeMsgKeyValue(orig_value):
+        # replace % and &
+        return orig_value.raplace('%', '%25').replace('&', '%26')
+
+    @staticmethod
+    def DecodeMsgKeyValue(orig_value):
+        # revert % and &
+        return orig_value.replace('%26', '&').replace('%25', '%')
+
+    @staticmethod
+    def GetMsgKey(msgcontent, msgkey):
+        msgvalue = ''
+        startpos = msgcontent.find(msgkey + '=')
+        if startpos != -1:
+            endpos = msgcontent.find('&', startpos)
+            if endpos != -1:
+                msgvalue = msgcontent[startpos + len(msgkey) + 1:endpos]
+            else:
+                msgvalue = msgcontent[startpos + len(msgkey) + 1:]
+        return ReceiverMsgUtil.DecodeMsgKeyValue(msgvalue)
+
+    @staticmethod
+    def GetMsgSender(msgcontent):
+        return ReceiverMsgUtil.GetMsgKey(msgcontent, "msgsender")
+
+    @staticmethod
+    def GetMsgId(msgcontent):
+        return ReceiverMsgUtil.GetMsgKey(msgcontent, "msgid")
+
+    @staticmethod
+    def GetMsgParam(msgcontent):
+        return ReceiverMsgUtil.GetMsgKey(msgcontent, "msgparam")
+
+    @staticmethod
+    def MakeMsgNetData(msgid, msgparam, msgsender = ''):
+        msgid = ReceiverMsgUtil.EncodeMsgKeyValue(msgid)
+        msgparam = ReceiverMsgUtil.EncodeMsgKeyValue(msgparam)
+        msgsender = ReceiverMsgUtil.EncodeMsgKeyValue(msgsender)
+        netmsg_str = ''
+        return 'msgid=' + msgid + '&msgparam=' + msgparam + '&msgsender=' + msgsender
+
 class ReceiverSendMsgReq:
     def __init__(self):
         self.is_sync = 0
@@ -441,15 +485,6 @@ class ReceiverSendMsgReq:
     def SetMsgData(self, data):
         self.data_len = len(data)
         self.data = data
-
-    def CheckMsgId(self):
-        return ''
-
-    def CheckMsgSender(self):
-        return ''
-
-    def GetMsgParam(self):
-        return ''
 
 class ReceiverSendMsgRsp:
     def __init__(self):

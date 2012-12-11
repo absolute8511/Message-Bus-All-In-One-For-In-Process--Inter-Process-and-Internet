@@ -357,7 +357,7 @@ private:
             assert(!m_sendmsg_rsp_container[waiting_syncid]);
             m_sendmsg_rsp_container[waiting_syncid].reset(new RspSendMsgState);
             cur_sendmsg_rsp = m_sendmsg_rsp_container[waiting_syncid];
-            //g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
+            g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
         }
         uint32_t write_len = sizeof(syncflag) + sizeof(waiting_syncid) + sizeof(task.data_len) + task.data_len;
         boost::shared_array<char> writedata(new char[write_len]);

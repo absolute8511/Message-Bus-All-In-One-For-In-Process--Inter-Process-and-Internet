@@ -452,7 +452,7 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
     std::string rsp_content;
     //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
     bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
-        param, rsp_content, 2);
+        param, rsp_content, 5);
     if(success)
     {
         //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
@@ -560,9 +560,9 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            testremotemsgbus_broadcast_sub(param, longdata);
+            //testremotemsgbus_broadcast_sub(param, longdata);
             //testremotemsgbus_direct_sub(param, longdata);
-            testremotemsgbus_relay_sub(param, longdata);
+            //testremotemsgbus_relay_sub(param, longdata);
             
             sendcounter++;
             if(sendcounter % 10 == 0)
@@ -572,7 +572,7 @@ void testremotemsgbus()
                     break;
             }
             sleep(1);
-            //testremotemsgbus_sync_sub(param);            
+            testremotemsgbus_sync_sub(param);            
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
@@ -825,7 +825,7 @@ void testSimpleLogger()
 
 int main()
 {
-    init_signals_env();
+    //init_signals_env();
     using namespace core;
     //SimpleLogger::Instance().Init("/Users/absolute/workspace/aliwwforlinux/Bin/testlog.log", lv_debug);
     SimpleLogger::Instance().Init("./testlog.log", lv_debug);

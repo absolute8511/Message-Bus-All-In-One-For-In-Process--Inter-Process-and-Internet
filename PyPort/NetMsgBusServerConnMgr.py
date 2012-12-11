@@ -15,8 +15,8 @@ logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(leve
 log = logging.getLogger(__name__)
 
 class NetMsgBusServerConnMgr(asyncore.dispatcher):
-    def __init__(self, server_ip, server_port, receiver_ip, receiver_port, receiver_name):
-        asyncore.dispatcher.__init__(self)
+    def __init__(self, server_ip, server_port, receiver_ip, receiver_port, receiver_name, sockmap):
+        asyncore.dispatcher.__init__(self, map=sockmap)
         self.rsp_handlers = {
                 kMsgBusBodyType.RSP_CONFIRM_ALIVE : self.HandleRspConfirmAlive,
                 kMsgBusBodyType.RSP_REGISTER : self.HandleRspRegister,
@@ -33,6 +33,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
                 'unknown_pbtype' : self.HandlePBUnknown
                 }
 
+        self.sockmap = sockmap
         self.writelocker = threading.Lock()
         self.server_ip = server_ip
         self.server_port = server_port
@@ -48,7 +49,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.connect( (server_ip, server_port) )
 
     def doloop(self):
-        asyncore.loop(timeout=1)
+        asyncore.loop(timeout=1, map=self.sockmap)
         if self.need_stop:
             self.close()
             self.is_closed = True

@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(leve
 log = logging.getLogger(__name__)
 
 class ReceiverChannel(asyncore.dispatcher):
-    def __init__(self, sock, addr):
-        asyncore.dispatcher.__init__(self, sock)
+    def __init__(self, sock, addr, sockmap):
+        asyncore.dispatcher.__init__(self, sock=sock, map=sockmap)
         self.addr = addr
         self.last_active = time.time()
         self.buffer = ''
@@ -24,7 +24,6 @@ class ReceiverChannel(asyncore.dispatcher):
 
     def handle_read(self):
         self.last_active = time.time()
-        log.debug('begin read data from client :%s ', self.addr)
         self.ReceivePack()
 
     def readable(self):
@@ -48,16 +47,13 @@ class ReceiverChannel(asyncore.dispatcher):
 
     def ReceivePack(self):
         msg_pack = ReceiverSendMsgReq()
-        log.debug('receiver message head: %d, ', msg_pack.HeadSize(), )
         headdata = self.recv(msg_pack.HeadSize())
-        print ','.join('%#04x' % ord(c) for c in headdata)
         msg_pack.UnPackHead(headdata)
         msgcontent = self.recv(msg_pack.data_len)
         msg_pack.UnPackBody(msgcontent)
         # 消息格式必须是 msgid=消息标示串＆msgparam=具体的消息内容 
         # 具体的消息内容可以是JSON/XML数据格式(或者也可以是二进制数据)，具体由收发双方协定
         # 第一次连接后必须先发一个包含msgsender的消息串表明自己的身份
-        log.debug("got sendmsg data, syncflag:%d, sync_sid:%d, data_len:%d, sender:%s.", msg_pack.is_sync, msg_pack.sync_sid, msg_pack.data_len, msg_pack.CheckMsgSender());
         if msg_pack.is_sync > 0:
             log.debug("got a sync request, sid:%d, client:%s", msg_pack.sync_sid, self.addr)
             self.NetMsgBusRspSendMsg(msg_pack)
@@ -66,31 +62,31 @@ class ReceiverChannel(asyncore.dispatcher):
             #NetMsgBusToLocalMsgBus(msgcontent);
 
     def NetMsgBusRspSendMsg(self, msg_pack):
-        msgid = msg_pack.CheckMsgId()
-        if msgid is not None:
-            msgparam = msg_pack.GetMsgParam()
-            if msgparam is not None:
-                # SendMsg(msgid, msgparam)
-                rsp_pack = ReceiverSendMsgRsp()
-                rsp_pack.sync_sid = msg_pack.sync_sid
-                rsp_pack.SetRspData(msgparam)
-                self.buffer += rsp_pack.PackData()
-                log.debug("process a sync request finished, sid:%d", sync_sid);
-                return
+        msgid = ReceiverMsgUtil.GetMsgId(msg_pack.data)
+        if len(msgid) > 0:
+            msgparam = ReceiverMsgUtil.GetMsgParam(msg_pack.data)
+            # SendMsg(msgid, msgparam)
+            rsp_pack = ReceiverSendMsgRsp()
+            rsp_pack.sync_sid = msg_pack.sync_sid
+            rsp_pack.SetRspData(msgparam)
+            self.buffer += rsp_pack.PackData()
+            log.debug("process a sync request finished, sid:%d, msgid:%s, msgparam:%s", msg_pack.sync_sid, msgid, msgparam);
 
 class NetMsgBusReceiverMgr(asyncore.dispatcher):
 
-    def __init__(self, receiver_ip, receiver_port):
-        asyncore.dispatcher.__init__(self)
+    def __init__(self, receiver_ip, receiver_port, sockmap):
+        asyncore.dispatcher.__init__(self, map=sockmap)
 
         self.receiver_ip = receiver_ip
         self.receiver_port = receiver_port
         self.buffer = ''
         self.need_stop = False
         self.is_closed = False
+        self.sockmap = sockmap
 
     def StartReceiver(self):
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
         self.bind(('', self.receiver_port))
         self.listen(16)
         log.info('receiver begin listen on port: %d', self.receiver_port)
@@ -100,7 +96,7 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
         log.debug('stopping receiver server ')
 
     def doloop(self):
-        asyncore.loop(timeout=1)
+        asyncore.loop(timeout=1, map=self.sockmap)
         if self.need_stop:
             self.close()
             self.is_closed = True
@@ -112,7 +108,7 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
         else:
             conn, addr = pair
             log.info('new client connected to receiver: %s', addr)
-            ReceiverChannel(conn, addr)
+            ReceiverChannel(conn, addr, self.sockmap)
 
     def handle_close(self):
         self.close()
