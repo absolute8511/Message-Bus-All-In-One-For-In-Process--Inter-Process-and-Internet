@@ -49,7 +49,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.connect( (server_ip, server_port) )
 
     def doloop(self):
-        asyncore.loop(timeout=1, map=self.sockmap)
+        asyncore.loop(timeout=1, count=1, map=self.sockmap)
         if self.need_stop:
             self.close()
             self.is_closed = True

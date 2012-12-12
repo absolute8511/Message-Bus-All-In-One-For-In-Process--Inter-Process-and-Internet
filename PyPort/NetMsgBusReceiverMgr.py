@@ -26,10 +26,13 @@ class ReceiverChannel(asyncore.dispatcher):
         self.last_active = time.time()
         self.ReceivePack()
 
-    def readable(self):
-        if (time.time() - self.last_active > 45):
+    def is_timeout(self):
+        if time.time() - self.last_active > 45:
             log.debug('client no active long time, close it %s ', self.addr)
-            self.close()
+            return True
+        return False
+
+    def readable(self):
         return True
 
     def writable(self):
@@ -96,10 +99,42 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
         log.debug('stopping receiver server ')
 
     def doloop(self):
-        asyncore.loop(timeout=1, map=self.sockmap)
+        try:
+            asyncore.loop(timeout=1, count=1, map=self.sockmap)
+        except:
+            log.info('receiver server loop exception')
+
+        for c in self.sockmap.values():
+            if c.is_timeout():
+                c.close()
+
         if self.need_stop:
             self.close()
             self.is_closed = True
+            log.debug('close all clients from loop')
+            for c in self.sockmap.values():
+                c.close()
+
+    def readable(self):
+        return True
+
+    def is_timeout(self):
+        return False
+
+    def handle_accept(self):
+        pair = self.accept()
+        if pair is None:
+            pass
+        else:
+            conn, addr = pair
+            log.info('new client connected to receiver: %s', addr)
+            ReceiverChannel(conn, addr, self.sockmap)
+
+    def handle_close(self):
+        self.close()
+        self.is_closed = True
+        log.info('receiver server %s closed', self.server_ip)
+        return True
 
     def handle_accept(self):
         pair = self.accept()
