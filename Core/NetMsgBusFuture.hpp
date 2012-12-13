@@ -31,6 +31,11 @@ public:
         set_result(result.data(), result.size());
     }
 
+    bool is_bad() const
+    {
+        return time(NULL) - generated_time_ > MAX_EXIST_TIME;
+    }
+
     bool get(int timeout, std::string& result)
     {
         if(!join(timeout))
@@ -73,15 +78,18 @@ public:
         return ready;
     }
     NetFuture()
-        :ready_(false)
+        :ready_(false),
+        generated_time_(time(NULL))
     {
     }
 
 private:
     bool ready_;
     std::string rsp_content_;
+    time_t  generated_time_;
     core::common::locker wait_lock_;
     core::common::condition wait_cond_;
+    static const int MAX_EXIST_TIME = 120;
 };
 
 }

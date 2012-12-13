@@ -180,6 +180,7 @@ public:
 
     void Stop()
     {
+        safe_clear_bad_future();
         m_req2receiver_terminate = true;
         {
             core::common::locker_guard guard(m_reqtoreceiver_locker);
@@ -199,6 +200,26 @@ private:
     {
         MsgBusGetClientRsp rsp;
         rsp.UnPackBody(msgparam.paramdata.get());
+        std::string clientname(rsp.dest_name);
+        // remove all the pending task belong the rsp client name.
+        Req2ReceiverTaskContainerT pendingtasks;
+        {
+            core::common::locker_guard guard(m_waitingtask_locker);
+            WaitingReq2ReceiverTaskT::iterator it = m_wait2send_task_container.find(clientname);
+            if(it != m_wait2send_task_container.end())
+            {
+                pendingtasks = it->second;
+                // clear all waiting tasks.
+                it->second.clear();
+                m_wait2send_task_container.erase(it);
+            }
+            else
+            {
+                LOG(g_log, lv_info, "pending task %zu, but no pending task in client %s.\n", m_wait2send_task_container.size(), clientname.c_str());
+            }
+        }
+        Req2ReceiverTaskContainerT::iterator taskit = pendingtasks.begin();
+
         if(rsp.ret_code == 0)
         {
             LocalHostInfo hostinfo;
@@ -206,34 +227,13 @@ private:
             inet_ntop(AF_INET, &rsp.dest_host.server_ip, ip, sizeof(ip));
             hostinfo.host_ip = ip;
             hostinfo.host_port = ntohs(rsp.dest_host.server_port);
-            std::string clientname(rsp.dest_name);
-            /*printf("get client info returned. ret name : %s(%u), ip:port : %s:%d\n", clientname.c_str(), clientname.size(),
+            LOG(g_log, lv_debug, "get client info returned. ret name : %s(%u), ip:port : %s:%d\n", clientname.c_str(), clientname.size(),
               hostinfo.host_ip.c_str(), 
-              hostinfo.host_port);*/
+              hostinfo.host_port);
             {
                 core::common::locker_guard guard(m_cached_receiver_locker);
                 m_cached_client_info[clientname] = hostinfo;
             }
-
-            // process all the pending task belong the rsp client name.
-            Req2ReceiverTaskContainerT pendingtasks;
-            {
-                core::common::locker_guard guard(m_waitingtask_locker);
-                WaitingReq2ReceiverTaskT::iterator it = m_wait2send_task_container.find(clientname);
-                if(it != m_wait2send_task_container.end())
-                {
-                    pendingtasks = it->second;
-                    // clear all waiting tasks.
-                    it->second.clear();
-                    m_wait2send_task_container.erase(it);
-                }
-                else
-                {
-                    //printf("pending task %zu, but no pending task in client %s.\n", m_wait2send_task_container.size(), clientname.c_str());
-                }
-
-            }
-            Req2ReceiverTaskContainerT::iterator taskit = pendingtasks.begin();
             while(taskit != pendingtasks.end())
             {
                 // the client info has just update, so do not retry to update again.
@@ -245,29 +245,9 @@ private:
         else
         {
             PostMsg("netmsgbus.server.getclient.error", CustomType2Param(std::string(rsp.dest_name)));
-            //printf("msgbus server return error while get client info, ret_code: %d.\n", rsp.ret_code);
-            std::string clientname(rsp.dest_name);
-            // remove all the pending task belong the rsp client name.
-            Req2ReceiverTaskContainerT pendingtasks;
-            {
-                core::common::locker_guard guard(m_waitingtask_locker);
-                WaitingReq2ReceiverTaskT::iterator it = m_wait2send_task_container.find(clientname);
-                if(it != m_wait2send_task_container.end())
-                {
-                    pendingtasks = it->second;
-                    // clear all waiting tasks.
-                    it->second.clear();
-                    m_wait2send_task_container.erase(it);
-                }
-                else
-                {
-                    LOG(g_log, lv_info, "pending task %zu, but no pending task in client %s.\n", m_wait2send_task_container.size(), clientname.c_str());
-                }
-            }
-            Req2ReceiverTaskContainerT::iterator taskit = pendingtasks.begin();
+            LOG(g_log, lv_warn, "server return error while query client info, ret_code: %d.", rsp.ret_code);
             while(taskit != pendingtasks.end())
             {
-                // the client info has just update, so do not retry to update again.
                 taskit->retry = false;
                 safe_remove_future(taskit->future_id);
                 ++taskit;
@@ -345,6 +325,7 @@ private:
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
 
+        safe_clear_bad_future();
     }
     void Req2Receiver_onError(TcpSockSmartPtr sp_tcp)
     {
@@ -353,6 +334,7 @@ private:
         printf("client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
+        safe_clear_bad_future();
     }
     bool IdentiySelfToReceiver(TcpSockSmartPtr sp_tcp)
     {
@@ -462,23 +444,15 @@ private:
         if( !newtcp )
         {
             SockHandler callback;
-            if(task.sync)
-            {
-                // sync sendmsg need a onRead callback to get the sync rsp data.
-                callback.onRead = boost::bind(&Req2ReceiverMgr::Req2Receiver_onRead, this, _1, _2, _3);
-            }
-            else
-            {
-                // do not need the onRead event.
-                callback.onRead = NULL;
-            }
+            // both sync sendmsg and postmsg need a onRead callback to get the future rsp data.
+            callback.onRead = boost::bind(&Req2ReceiverMgr::Req2Receiver_onRead, this, _1, _2, _3);
             callback.onSend = boost::bind(&Req2ReceiverMgr::Req2Receiver_onSend, this, _1);
             callback.onClose = boost::bind(&Req2ReceiverMgr::Req2Receiver_onClose, this, _1);
             callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
 
             if(ev_waiter == NULL)
             {
-                g_log.Log(lv_info, "NULL event waiter. use the inner eventloop in the pool\n");
+                g_log.Log(lv_info, "NULL event waiter. use the inner eventloop in the pool.");
             }
             // first identify me to the receiver.
             //IdentiySelfToReceiver(newtcp);
@@ -618,6 +592,23 @@ private:
     {
         core::common::locker_guard guard(m_rsp_sendmsg_lock);
         m_sendmsg_rsp_container.erase(future_sid);
+    }
+
+    void safe_clear_bad_future()
+    {
+        core::common::locker_guard guard(m_rsp_sendmsg_lock);
+        FutureRspContainerT::iterator future_it = m_sendmsg_rsp_container.begin();
+        while(future_it != m_sendmsg_rsp_container.end())
+        {
+            if(future_it->second && future_it->second->is_bad())
+            {
+                future_it = m_sendmsg_rsp_container.erase(future_it);
+            }
+            else
+            {
+                ++future_it;
+            }
+        }
     }
 
     pthread_t m_req2receiver_tid;
