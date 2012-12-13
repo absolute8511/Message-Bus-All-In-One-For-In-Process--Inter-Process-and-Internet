@@ -321,6 +321,7 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
             else
             {
                 // no handler
+                LOG(g_log, lv_debug, "no handler for msgid:%s, ", msgid.c_str());
                 return false;
             }
         }
@@ -328,7 +329,9 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         {
             MsgTaskQueue taskqueue;
             taskqueue.push_back(MsgTask(msgid, param, callertid));
-            return ExecuteMsgBusHandlers(msgid, taskqueue, msg_handlers);
+            bool ret = ExecuteMsgBusHandlers(msgid, taskqueue, msg_handlers);
+            param = taskqueue.back().msgparam;
+            return ret;
         }
     }
 
@@ -558,7 +561,8 @@ void* MsgTaskProcessProc(void*)
             sp_readyinfo->ready = true;
             sp_readyinfo->rspparam = firsttask.msgparam;
             sp_readyinfo->rspresult = ret;
-            //g_log.Log(lv_debug, "notify sendmsg ready, tid:%lld, msg:%s", (uint64_t)mtask.callertid, mtask.msgid.c_str());
+            //LOG(g_log, lv_debug, "notify sendmsg ready, tid:%lld, msg:%s, rspdata:%s", (uint64_t)firsttask.callertid,
+            //    firsttask.msgid.c_str(), firsttask.msgparam.paramdata.get());
             sp_readyinfo->wait_cond.notify_all();
         }
     }
@@ -625,6 +629,21 @@ bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid,
 bool NetMsgBusQueryHostInfo(const std::string& clientname)
 {
     return msgbus_req_receiver_info(clientname);
+}
+
+boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param)
+{
+    assert(param.paramlen);
+    std::string netmsg_str(param.paramdata.get(), param.paramlen);
+    std::string encodemsgid = msgid;
+    EncodeMsgKeyValue(encodemsgid);
+    EncodeMsgKeyValue(netmsg_str);
+    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
+    uint32_t netmsg_len = netmsg_str.size();
+    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
+    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
+
+    return msgbus_postmsg_direct_to_client(clientname, netmsg_len, netmsg_data);
 }
 
 bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, 

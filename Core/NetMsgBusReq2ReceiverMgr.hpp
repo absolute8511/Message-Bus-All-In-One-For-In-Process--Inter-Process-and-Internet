@@ -352,6 +352,7 @@ private:
         uint32_t netmsg_len = netmsg_str.size();
         boost::shared_array<char> netmsg_data(new char[netmsg_len]);
         memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
+        identifytask.future_id = 0;
         identifytask.data = netmsg_data;
         identifytask.data_len = netmsg_len;
         string rsp;
@@ -570,6 +571,8 @@ private:
     {
         core::common::locker_guard guard(m_rsp_sendmsg_lock);
         ++future_sessionid_;
+        if(future_sessionid_ == 0)
+            ++future_sessionid_;
         uint32_t waiting_futureid = future_sessionid_;
         std::pair<FutureRspContainerT::iterator, bool> inserted = m_sendmsg_rsp_container.insert(
             std::make_pair(waiting_futureid, boost::shared_ptr<NetFuture>(new NetFuture)));

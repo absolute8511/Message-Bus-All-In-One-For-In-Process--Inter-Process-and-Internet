@@ -123,7 +123,7 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
 // response to the client who has send a msg using sync mode.
 inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent, uint32_t sync_sid)
 {
-    //g_log.Log(core::lv_debug, "process a sync request begin :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
+    //LOG(g_log, core::lv_debug, "process a sync request begin :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
     std::string msgid;
     if(CheckMsgId(netmsgbus_msgcontent, msgid))
     {
@@ -141,7 +141,7 @@ inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netms
             memcpy(writedata + sizeof(sync_sid_n), (char*)&data_len_n, sizeof(data_len_n));
             memcpy(writedata + sizeof(sync_sid_n) + sizeof(data_len_n), data.get(), data_len);
             sp_tcp->SendData(writedata, write_len);
-            //g_log.Log(core::lv_debug, "process a sync request finished :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
+            //LOG(g_log, core::lv_debug, "process a sync request finished :%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
         }
     }
 }

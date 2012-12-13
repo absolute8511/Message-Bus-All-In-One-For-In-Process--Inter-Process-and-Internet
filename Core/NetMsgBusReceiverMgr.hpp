@@ -265,8 +265,11 @@ private:
                     m_client_senders[sp_tcp->GetFD()] = sendername;
                 }
             }
-            // 调用消息处理函数后，把数据写回
-            threadpool::queue_work_task(boost::bind(NetMsgBusRspSendMsg, sp_tcp, msgcontent, sync_sid), 0);
+            if(sync_sid != 0)
+            {
+                // 调用消息处理函数后，把数据写回
+                threadpool::queue_work_task(boost::bind(NetMsgBusRspSendMsg, sp_tcp, msgcontent, sync_sid), 0);
+            }
             size -= needlen;
             readedlen += needlen;
             pdata += data_len;

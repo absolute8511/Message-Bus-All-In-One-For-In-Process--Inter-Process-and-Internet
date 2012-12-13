@@ -66,10 +66,10 @@ bool msgbus_postmsg_broadcast(uint32_t data_len, boost::shared_array<char> data)
 }
 
 // 直接使用缓存的客户端信息发送消息，如果缓存不存在会获取服务器上的数据后再重试
-bool msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
+boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
 {
     if(!sp_req2receiver_mgr)
-        return false;
+        return boost::shared_ptr<NetFuture>();
     return sp_req2receiver_mgr->PostMsgDirectToClient(clientname, data_len, data);
 }
 

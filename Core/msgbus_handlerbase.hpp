@@ -73,7 +73,7 @@ namespace NetMsgBus
             is_continue = true;
             bool result = false;
             {
-                if(hwrapper.type == 0)
+                if(hwrapper.type == 0 || hwrapper.type == 2)
                 {
                     if(hwrapper.handler_func != NULL)
                         result = (dynamic_cast<T*>(this)->*(hwrapper.handler_func))(msgid, param, is_continue);
@@ -82,7 +82,7 @@ namespace NetMsgBus
                 {// long time function, to avoid others can not going on, we put it into threadpool.
                     result = threadpool::queue_work_task(boost::bind(hwrapper.handler_func, this->shared_from_this(), msgid, param, is_continue), 0);
                 }
-                else if(hwrapper.type == 2)
+                else if(hwrapper.type == 3)
                 {// UI event, let the ui thread to handle the function
                     // ::SendMessage(m_hWnd, WM_CALL_MYFUNC, boost::bind(it->second.handler_func, this, msgid, param, is_continue), NULL );
                 }

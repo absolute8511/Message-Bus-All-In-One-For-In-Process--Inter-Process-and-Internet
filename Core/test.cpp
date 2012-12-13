@@ -6,6 +6,7 @@
 #include "TcpSock.h"
 #include "SelectWaiter.h"
 #include "SimpleLogger.h"
+#include "NetMsgBusFuture.hpp"
 
 #include "xparam.hpp"
 #include <inttypes.h>
@@ -138,7 +139,7 @@ public:
     }
     bool testMsgBus3(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
-        //printMsg(msgid, param, __FUNCTION__);
+        printMsg(msgid, param, __FUNCTION__);
         std::string rspstr("Yeah! I send the rsp data to you.");
         param = CustomType2Param(rspstr);
         //sleep(3);
@@ -172,7 +173,7 @@ public:
         string longdata;
         xp.get_Int("testkey", value);
         xp.get_Str("testlongdata", longdata);
-        //printf("process the (msg,param): (%s,%d,longdatasize:%zu) in %s , in thread:%lu.\n", msgid.c_str(), value, longdata.size(), func_name.c_str(), (unsigned long)pthread_self());
+        printf("process the (msg,param): (%s,%d,longdatasize:%zu) in %s , in thread:%lu.\n", msgid.c_str(), value, longdata.size(), func_name.c_str(), (unsigned long)pthread_self());
         //m_counter++;
         //if(m_counter % 100 == 0)
         //{
@@ -456,16 +457,36 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
     if(success)
     {
         //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
-        //printf("use netmsgbus get net data success in thread:%llu, data:%s.\n", (uint64_t)pthread_self(), rsp_content.c_str());
+        LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         //if(mintimeout > 1)
         //  --mintimeout;
         //sleep(3);
     }
     else
     {
-        g_log.Log(lv_debug, "timeout(%d) err get net data in thread:%llu", (uint64_t)pthread_self());
+        g_log.Log(lv_debug, "timeout err get net data in thread:%llu", (uint64_t)pthread_self());
         s_break = true;
     }
+    sleep(1);
+    boost::shared_ptr<NetFuture> future = NetMsgBusAsyncGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
+        param);
+    if(future)
+    {
+        if(future->get(5, rsp_content))
+        {
+            LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+        }
+        else
+        {
+            g_log.Log(lv_debug, "timeout err get net data in thread:%llu while using async get.", (uint64_t)pthread_self());
+        }
+    }
+    else
+    {
+        g_log.Log(lv_debug, "err send net data in thread:%llu, using async get", (uint64_t)pthread_self());
+        s_break = true;
+    }
+
 }
 
 // 测试远程消息总线，跨进程跨机器等
@@ -834,7 +855,7 @@ int main()
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);
     printf("main in thread: %lld.\n",(uint64_t)pthread_self());
-    testSimpleLogger();
+    //testSimpleLogger();
     //sleep(30000);
     //testthreadpool();
     //testXParam();

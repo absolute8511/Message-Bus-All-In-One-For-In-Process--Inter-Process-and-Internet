@@ -32,6 +32,7 @@ namespace NetMsgBus
         uint32_t  paramlen;
     };
 
+    class NetFuture;
     class IMsgHandler
     {
     public:
@@ -133,6 +134,7 @@ namespace NetMsgBus
     bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, 
     std::string& rsp_data, int32_t timeout_sec = 30);
 
+    boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param);
     // query all available services that are registered on the net message bus server
     int  NetMsgBusQueryServices(const std::string& match_str);
  
