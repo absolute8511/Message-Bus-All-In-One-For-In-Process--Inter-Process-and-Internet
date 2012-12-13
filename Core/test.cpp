@@ -815,6 +815,7 @@ void testSimpleLogger()
     {
     time_t t = time(NULL);
     int64_t tl = (int64_t)t;
+    LOG(g_log, lv_debug, "test lv_debug time_t printf %lld, pid:%d", (int64_t)t, pid);
     g_log.Log(lv_debug, "test lv_debug time_t printf %lld, pid:%d", (int64_t)t, pid);
     g_log.Log(lv_info, "test lv_info time_t printf %lld, pid:%d", (int64_t)t, pid);
     g_log.Log(lv_error, "test lv_error time_t printf %lld, pid:%d", (int64_t)t, pid);
@@ -833,7 +834,7 @@ int main()
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);
     printf("main in thread: %lld.\n",(uint64_t)pthread_self());
-    //testSimpleLogger();
+    testSimpleLogger();
     //sleep(30000);
     //testthreadpool();
     //testXParam();

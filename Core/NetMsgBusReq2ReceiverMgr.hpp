@@ -12,6 +12,7 @@
 #include "TcpSock.h"
 #include "SimpleLogger.h"
 #include "TcpClientPool.h"
+#include "NetMsgBusFuture.hpp"
 #include <errno.h>
 #include <pthread.h>
 #include <netinet/in.h>
@@ -271,27 +272,25 @@ private:
             needlen += data_len;
             if(size < needlen)
                 return readedlen;
-            boost::shared_ptr<RspSendMsgState> ready_sendmsg_rsp;
+            boost::shared_ptr<NetFuture> ready_sendmsg_rsp;
             {
                 //printf("one sync data returned. sid:%u.\n", sync_sid);
                 //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), sync_sid, sp_tcp->GetFD());
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                boost::unordered_map<uint32_t, boost::shared_ptr<RspSendMsgState> >::const_iterator cit = m_sendmsg_rsp_container.find(sync_sid);
-                if(cit == m_sendmsg_rsp_container.end())
+                boost::unordered_map<uint32_t, boost::shared_ptr<NetFuture> >::iterator future_it = m_sendmsg_rsp_container.find(sync_sid);
+                if(future_it == m_sendmsg_rsp_container.end())
                 {
                     g_log.Log(lv_warn, "received a non-exist sync_sid rsp, sid:%u ", sync_sid);
                 }
                 else
                 {
-                    ready_sendmsg_rsp = cit->second;
+                    ready_sendmsg_rsp = future_it->second;
+                    m_sendmsg_rsp_container.erase(future_it);
                 }
             }
             if(ready_sendmsg_rsp)
             {
-                core::common::locker_guard guard(ready_sendmsg_rsp->wait_lock);
-                ready_sendmsg_rsp->ready = true;
-                ready_sendmsg_rsp->rsp_content.assign(pdata, pdata + data_len);
-                ready_sendmsg_rsp->wait_cond.notify_all();
+                ready_sendmsg_rsp->set_result(pdata, data_len);
             }
             size -= needlen;
             readedlen += needlen;
@@ -347,7 +346,7 @@ private:
     {
         char syncflag = 0;
         uint32_t waiting_syncid = 0;
-        boost::shared_ptr<RspSendMsgState> cur_sendmsg_rsp;
+        boost::shared_ptr<NetFuture> cur_sendmsg_rsp;
         if(task.sync)
         {
             syncflag = 1;
@@ -355,7 +354,7 @@ private:
             ++sync_sessionid_;
             waiting_syncid = sync_sessionid_;
             assert(!m_sendmsg_rsp_container[waiting_syncid]);
-            m_sendmsg_rsp_container[waiting_syncid].reset(new RspSendMsgState);
+            m_sendmsg_rsp_container[waiting_syncid].reset(new NetFuture());
             cur_sendmsg_rsp = m_sendmsg_rsp_container[waiting_syncid];
             g_log.Log(lv_debug, "begin send sync data to client:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(), waiting_syncid, 9+ task.data_len, sp_tcp->GetFD());
         }
@@ -369,7 +368,7 @@ private:
         memcpy(writedata.get() + sizeof(syncflag) + sizeof(waiting_syncid) + sizeof(task.data_len), task.data.get(), task.data_len);
         if(!sp_tcp->SendData(writedata.get(), write_len))
         {
-            printf("send msg to other client failed.\n");
+            LOG(g_log, lv_warn, "send msg to other client failed.");
             rsp_content = "send data failed.";
             return false;
         }
@@ -377,44 +376,15 @@ private:
         bool result = true;
         if(task.sync)
         {
-            struct timespec ts;
-            ts.tv_sec = time(NULL) + task.timeout;
-            ts.tv_nsec = 0;
-            bool ready = false;
-            while(!ready)
-            {
-                {
-                    core::common::locker_guard guard(cur_sendmsg_rsp->wait_lock);
-                    ready = cur_sendmsg_rsp->ready;
-                    if(ready)
-                    {
-                        rsp_content = cur_sendmsg_rsp->rsp_content;
-                        break;
-                    }
-                    int retcode = cur_sendmsg_rsp->wait_cond.waittime(cur_sendmsg_rsp->wait_lock, &ts);
-                    if(retcode == ETIMEDOUT)
-                    {
-                        printf(" wakeup for timeout. sid:%d.\n", waiting_syncid);
-                        //return false;
-                        result = false;
-                        rsp_content = "wait time out.";
-                        break;
-                    }
-                    ready = cur_sendmsg_rsp->ready;
-                    if(ready)
-                    {
-                        rsp_content = cur_sendmsg_rsp->rsp_content;
-                        break;
-                    }
-                }
-            }
+            result = cur_sendmsg_rsp->get(task.timeout, rsp_content);
             // close sync Tcp, remove the tcp in onClose event.
             // changed: do not close for later reuse, now sync request can be seperate by sessionid 
             // in the same tcp.
             // sp_tcp->DisAllowSend();
             //g_log.Log(lv_debug, "end send sync data to client:%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), waiting_syncid);
-            core::common::locker_guard guard(m_rsp_sendmsg_lock);
-            m_sendmsg_rsp_container.erase(waiting_syncid);
+            // erase in on read event.
+            //core::common::locker_guard guard(m_rsp_sendmsg_lock);
+            //m_sendmsg_rsp_container.erase(waiting_syncid);
         }
         return result;
     }
@@ -598,19 +568,7 @@ private:
     core::common::locker    m_waitingtask_locker;
 
     core::common::locker    m_rsp_sendmsg_lock;
-    //core::common::condition m_rsp_sendmsg_condition;
-    struct RspSendMsgState
-    {
-        bool ready;
-        std::string rsp_content;
-        core::common::locker wait_lock;
-        core::common::condition wait_cond;
-        RspSendMsgState()
-            :ready(false)
-        {
-        }
-    };
-    boost::unordered_map< uint32_t, boost::shared_ptr<RspSendMsgState> > m_sendmsg_rsp_container;
+    boost::unordered_map< uint32_t, boost::shared_ptr<NetFuture> > m_sendmsg_rsp_container;
 
     ServerConnMgr* m_server_connmgr;
     volatile bool m_req2receiver_running;

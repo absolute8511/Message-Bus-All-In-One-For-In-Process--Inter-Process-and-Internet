@@ -65,5 +65,6 @@ private:
     std::string m_category;
 };
 
+#define LOG(logger, level, fmt, ...) logger.Log(level, (std::string("[%s:%d]") + fmt).c_str(), __FILE__, __LINE__, ##__VA_ARGS__)
 }// end of namespace core
 #endif

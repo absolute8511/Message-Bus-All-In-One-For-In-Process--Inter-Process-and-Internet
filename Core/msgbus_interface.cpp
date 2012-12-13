@@ -262,7 +262,7 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
             }
         }
     }
-    ExecuteMsgBusHandlers(msgid, alltasks, msg_handlers);
+    return ExecuteMsgBusHandlers(msgid, alltasks, msg_handlers);
 }
 // 同步处理，直接调用处理函数
 bool SendMsg(const std::string& msgid, MsgBusParam& param)
