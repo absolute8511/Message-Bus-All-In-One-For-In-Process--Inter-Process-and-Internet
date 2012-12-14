@@ -131,7 +131,6 @@ void LoggerCategory::Log(LogLevel lv, const char* fmt, ...)
     }
     if(lv > SimpleLogger::Instance().GetLogLevel())
         return;
-    if(lv == lv_debug || lv == lv_error)
     {
 #ifdef NDEBUG 
         if(lv == lv_debug)
