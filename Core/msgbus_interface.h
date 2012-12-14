@@ -126,15 +126,21 @@ namespace NetMsgBus
     // send messages to a client connected with netmsgbus server. Use empty dest_name to broadcast messages on the netmsgbus.
     // 
     bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid, MsgBusParam param, kMsgSendType sendtype);
+    bool NetMsgBusSendMsg(const std::string& dest_ip, unsigned short dest_port, const std::string& msgid,
+        MsgBusParam param);
     // if you have no more data to send, then you can disconnect from the receiver. 
     //void NetMsgBusDisConnectFromClient(const std::string& name);
     // get the ip and port info and cache them in client. just work like dns name resolve.
     bool NetMsgBusQueryHostInfo(const std::string& clientname);
     // send messages to a client and wait response data from it.
     bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, 
-    std::string& rsp_data, int32_t timeout_sec = 30);
+        std::string& rsp_data, int32_t timeout_sec = 30);
+    bool NetMsgBusGetData(const std::string& dest_ip, unsigned short dest_port, const std::string& msgid, MsgBusParam param, 
+        std::string& rsp_data, int32_t timeout_sec = 30);
 
     boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param);
+    boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& dest_ip,
+        unsigned short dest_port, const std::string& msgid, MsgBusParam param);
     // query all available services that are registered on the net message bus server
     int  NetMsgBusQueryServices(const std::string& match_str);
  

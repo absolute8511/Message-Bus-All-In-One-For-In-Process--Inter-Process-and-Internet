@@ -447,6 +447,112 @@ void testremotemsgbus_relay_sub(MsgBusParam& param, const std::string& longdata)
     NetMsgBusSendMsg("test.receiverclient_B", "msg_netmsgbus_testmsg1", param, SendUseServerRelay);
 }
 
+void testremotemsgbus_without_server()
+{
+    NetMsgBusConnectServer("127.0.0.1",19000);
+    printf("start as : (a for sender or b for receiverA or c for receiverB):\n");
+    char inputflag = getchar();
+
+    MyMsgHandlerClassPtr thandlerobj;
+    MsgHandlerMgr::GetInstance(thandlerobj);
+    if(inputflag == 'a' || inputflag == 'b' || inputflag == 'c')
+    {
+        std::string service_name;
+        unsigned short int clientport;
+        if(inputflag == 'a')
+        {
+            service_name = "test.receiverclient_A";
+            thandlerobj->AddHandler("msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0); 
+            thandlerobj->AddHandler("msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
+            thandlerobj->AddHandler("msg_netmsgbus_testgetdata", &MyMsgHandlerClass::testMsgBus3, 2);
+            clientport = 9100;
+        }
+        else if(inputflag == 'b')
+        {
+            service_name = "test.receiverclient_B";
+            thandlerobj->AddHandler("msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0); 
+            thandlerobj->AddHandler("msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
+            clientport = 9101;
+        }
+        else if(inputflag == 'c')
+        {
+            //FilterMgr::AddIncludeSender("test.receiverclient_A");
+            //FilterMgr::AddExcludeMsgId("rsp_msg_netmsgbus_testmsg2");
+            service_name = "test.receiverclient_C";
+            thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus3, 0);
+            thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus3, 0);
+            clientport = 9102;
+        }
+        NetMsgBusRegReceiver(service_name, "", clientport);
+    }
+    else if(inputflag == 's')
+    {
+        //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0);
+        //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
+        unsigned short suggest_port = 0;
+        printf("press any key other than 'q' to start send test message to netmsgbus.\n");
+        core::XParam xp;
+        xp.put_Int("testkey", 100);
+        string longdata;
+        for(int i = 0; i < 80; i++)
+        {
+            longdata.push_back(char(i%180 + 32));
+        }
+        xp.put_Str("testlongdata", longdata);
+        MsgBusParam param = CustomType2Param(xp);
+        // 测试向指定的接收者发送消息
+        GenerateNextTestParam(param);
+        NetMsgBusSendMsg("127.0.0.1", 9100, "msg_netmsgbus_testmsg2", param);
+        NetMsgBusSendMsg("127.0.0.1", 9100, "msg_netmsgbus_testmsg1", param);
+
+        GenerateNextTestParam(param, longdata);
+        NetMsgBusSendMsg("127.0.0.1", 9101, "msg_netmsgbus_testmsg2", param);
+        NetMsgBusSendMsg("127.0.0.1", 9101, "msg_netmsgbus_testmsg1", param);
+
+        GenerateNextTestParam(param);
+        std::string rsp_content;
+        //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
+        bool success = NetMsgBusGetData("127.0.0.1", 9100, "msg_netmsgbus_testgetdata",
+            param, rsp_content, 5);
+        if(success && rsp_content.length() > 0)
+        {
+            //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
+            LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+        }
+        else
+        {
+            g_log.Log(lv_debug, "timeout err get net data in thread:%llu", (uint64_t)pthread_self());
+            s_break = true;
+        }
+        sleep(1);
+        boost::shared_ptr<NetFuture> future = NetMsgBusAsyncGetData("127.0.0.1", 9100, "msg_netmsgbus_testgetdata",
+            param);
+        if(future)
+        {
+            if(future->get(5, rsp_content) && rsp_content.length() > 0)
+            {
+                LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+            }
+            else
+            {
+                g_log.Log(lv_debug, "timeout err get net data in thread:%llu while using async get.", (uint64_t)pthread_self());
+            }
+        }
+        else
+        {
+            g_log.Log(lv_debug, "err send net data in thread:%llu, using async get", (uint64_t)pthread_self());
+            s_break = true;
+        }
+    }
+    while(true)
+    {
+        if(s_break)
+            break;
+        sleep(1);
+    }
+
+}
+
 void testremotemsgbus_sync_sub(MsgBusParam& param)
 {
     //GenerateNextTestParam(param);
@@ -863,7 +969,8 @@ int main()
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
     //testconcurrent_local();
-    testremotemsgbus();
+    //testremotemsgbus();
+    testremotemsgbus_without_server();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     DestroyMsgBus();

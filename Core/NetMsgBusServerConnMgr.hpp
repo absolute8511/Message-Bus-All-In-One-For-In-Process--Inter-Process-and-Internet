@@ -354,11 +354,11 @@ public:
     bool RegisterNetMsgBusReceiver(const std::string& clientip, unsigned short int clientport, 
         const std::string& clientname, kServerBusyState busy_state /* = LOW */)
     {
-        if(!m_server_connecting)
-            return false;
         m_receiver_ip = clientip;
         m_receiver_port = clientport;
         m_receiver_name = clientname;
+        if(!m_server_connecting)
+            return false;
         ClientHost host;
         host.server_ip = 0;
         if(clientip != "")

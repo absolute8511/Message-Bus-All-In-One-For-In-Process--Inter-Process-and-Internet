@@ -39,6 +39,23 @@ using namespace core::net;
 
 namespace NetMsgBus
 {
+// client host info, all data with local byte order.
+typedef struct S_LocalHostInfo 
+{
+    S_LocalHostInfo(const std::string& ip, unsigned short int port)
+        :host_ip(ip),
+        host_port(port)
+    {
+    }
+    S_LocalHostInfo()
+        :host_ip(""),
+        host_port(0)
+    {
+    }
+    std::string host_ip;
+    unsigned short int host_port;
+} LocalHostInfo;
+
 
 struct Req2ReceiverTask
 {
@@ -56,24 +73,8 @@ struct Req2ReceiverTask
     uint32_t data_len;
     boost::shared_array<char> data;
     int32_t  timeout;
+    LocalHostInfo  dest_client;
 };
-
-// 本地的客户端主机信息，里面的数据都是本机字节序
-typedef struct S_LocalHostInfo 
-{
-    S_LocalHostInfo(const std::string& ip, unsigned short int port)
-        :host_ip(ip),
-        host_port(port)
-    {
-    }
-    S_LocalHostInfo()
-        :host_ip(""),
-        host_port(0)
-    {
-    }
-    std::string host_ip;
-    unsigned short int host_port;
-} LocalHostInfo;
 
 class Req2ReceiverMgr : public MsgHandler<Req2ReceiverMgr>
 {
@@ -118,6 +119,25 @@ public:
     //    }
     //}
 
+    bool SendMsgDirectToClient(const std::string& dest_ip, unsigned short dest_port, uint32_t data_len, 
+        boost::shared_array<char> data, string& rsp_content, int32_t timeout)
+    {
+        if(dest_ip.empty() || !m_req2receiver_running )
+            return false;
+        Req2ReceiverTask task;
+        task.data_len = data_len;
+        task.data = data;
+        task.sync = true;
+        task.retry = false;
+        task.timeout = timeout;
+        task.dest_client.host_ip = dest_ip;
+        task.dest_client.host_port = dest_port;
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        task.future_id = future.first;
+        // sync sendmsg will not retry to update client info if failed to send message.
+        return ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase>(), task, rsp_content);
+    }
+
     bool SendMsgDirectToClient(const std::string& clientname, uint32_t data_len, 
         boost::shared_array<char> data, string& rsp_content, int32_t timeout)
     {
@@ -135,6 +155,32 @@ public:
         task.future_id = future.first;
         // sync sendmsg will not retry to update client info if failed to send message.
         return ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase>(), task, rsp_content);
+    }
+
+    boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& dest_ip, unsigned short dest_port,
+        uint32_t data_len, boost::shared_array<char> data)
+    {
+        boost::shared_ptr<NetFuture> ret_future;
+        if( !m_req2receiver_running )
+        {
+            LOG(g_log, lv_debug, "req2receiver not running when post message to receiver.");
+            return ret_future;
+        }
+        if(dest_ip.empty())
+            return ret_future;
+
+        Req2ReceiverTask rtask;
+        rtask.data = data;
+        rtask.data_len = data_len;
+        // send by ip , no retry need.
+        rtask.retry = false;
+        rtask.dest_client.host_ip = dest_ip;
+        rtask.dest_client.host_port = dest_port;
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        rtask.future_id = future.first;
+        if(!QueueReqTaskToReceiver(rtask))
+            return boost::shared_ptr<NetFuture>();
+        return future.second;
     }
 
     boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
@@ -342,7 +388,6 @@ private:
         identifytask.sync = 0;
         std::string netmsg_str;
         string sendername;
-        assert(m_server_connmgr != NULL);
         if(m_server_connmgr)
         {
             sendername = m_server_connmgr->GetClientName();
@@ -412,25 +457,33 @@ private:
     bool ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase> ev_waiter, const Req2ReceiverTask& task, string& rsp_content)
     {
         LocalHostInfo destclient;
-        bool cache_exist = safe_get_cached_host_info(task.clientname, destclient);
-        if(!cache_exist)
+        if(task.clientname.empty())
         {
-            // 缓存中没有该客户端信息，先将该任务放入等待列表中,
-            // 然后向服务器获取客户端主机信息
-            // 一旦收到服务器回来的客户端信息，会处理对应客户端的等待的任务
-            if(task.retry)
+            assert(!task.dest_client.host_ip.empty());
+            destclient = task.dest_client;
+        }
+        else
+        {
+            bool cache_exist = safe_get_cached_host_info(task.clientname, destclient);
+            if(!cache_exist)
             {
-                safe_queue_waiting_task(task);
-                if(m_server_connmgr)
-                    m_server_connmgr->ReqReceiverInfo(task.clientname);
+                // 缓存中没有该客户端信息，先将该任务放入等待列表中,
+                // 然后向服务器获取客户端主机信息
+                // 一旦收到服务器回来的客户端信息，会处理对应客户端的等待的任务
+                if(task.retry)
+                {
+                    safe_queue_waiting_task(task);
+                    if(m_server_connmgr)
+                        m_server_connmgr->ReqReceiverInfo(task.clientname);
+                }
+                else
+                {
+                    LOG(g_log, lv_warn, "error send data to client, no cached client info.");
+                    safe_remove_future(task.future_id);
+                    return false;
+                }
+                return true;
             }
-            else
-            {
-                LOG(g_log, lv_warn, "error send data to client, no cached client info.");
-                safe_remove_future(task.future_id);
-                return false;
-            }
-            return true;
         }
         TcpSockSmartPtr newtcp;
 
@@ -534,9 +587,18 @@ private:
                 rtask = req2recv_mgr->m_reqtoreceiver_task_container.front();
                 req2recv_mgr->m_reqtoreceiver_task_container.pop_front();
             }
+            std::string thread_name;
+            if(rtask.clientname.size() <= 2)
+            {
+                thread_name = "byip";
+            }
+            else
+            {
+                thread_name = rtask.clientname.substr(rtask.clientname.size() - 2);
+            }
             // in order to make sure the order of sendmsg , we should use the same thread to process the same client name sendmsg.
             threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, spwaiter, rtask),
-                "ProcessReqToReceiver" + rtask.clientname.substr(rtask.clientname.size() - 2));
+                "ProcessReqToReceiver" + thread_name);
         }
         req2recv_mgr->m_req2receiver_running = false;
         return 0;

@@ -27,6 +27,16 @@ bool msgbus_sendmsg_direct_to_client(const std::string& clientname, uint32_t dat
         return false;
     return sp_req2receiver_mgr->SendMsgDirectToClient(clientname, data_len, data, rsp_content, timeout_sec);
 }
+//
+bool msgbus_sendmsg_direct_to_client(const std::string& dest_ip, unsigned short dest_port, uint32_t data_len, 
+   boost::shared_array<char> data, string& rsp_content, int32_t timeout_sec)
+{
+    if(dest_ip == "")
+        return false;
+    if(!sp_req2receiver_mgr)
+        return false;
+    return sp_req2receiver_mgr->SendMsgDirectToClient(dest_ip, dest_port, data_len, data, rsp_content, timeout_sec);
+}
 
 // 注册本地的客户端接收消息的地址
 // 向网络服务器注册自己的消息接收客户端，告知消息总线以后使用此地址向该客户端进行消息的收发
@@ -72,6 +82,14 @@ boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& 
         return boost::shared_ptr<NetFuture>();
     return sp_req2receiver_mgr->PostMsgDirectToClient(clientname, data_len, data);
 }
+//
+boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& dest_ip, unsigned short dest_port,
+    uint32_t data_len, boost::shared_array<char> data)
+{
+    if(dest_ip.empty() || !sp_req2receiver_mgr)
+        return boost::shared_ptr<NetFuture>();
+    return sp_req2receiver_mgr->PostMsgDirectToClient(dest_ip, dest_port, data_len, data);
+}
 
 bool msgbus_req_receiver_info(const std::string& clientname)
 {
@@ -92,7 +110,11 @@ bool msgbus_query_available_services(const std::string& match_str)
 bool init_netmsgbus_client(const std::string& serverip, unsigned short int serverport)
 {
     if(!s_server_connmgr.StartServerCommunicateLoop(serverip, serverport))
-        return false;
+    {
+        // load local static client info.
+        printf("net msgbus server init failed, using non-center-server mode.\n");
+        //return false;
+    }
     
     MsgHandlerMgr::GetInstance(sp_req2receiver_mgr, false);
     if(!sp_req2receiver_mgr)
