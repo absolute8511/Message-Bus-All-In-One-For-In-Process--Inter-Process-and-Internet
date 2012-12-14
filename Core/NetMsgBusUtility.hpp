@@ -131,7 +131,8 @@ inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netms
         uint32_t data_len;
         if(GetMsgParam(netmsgbus_msgcontent, data, data_len))
         {
-            SendMsg(msgid, data, data_len);
+            if(!SendMsg(msgid, data, data_len))
+                data_len = 0;
             // when finished process, write the data back to the client.
             uint32_t sync_sid_n = htonl(sync_sid);
             uint32_t data_len_n = htonl(data_len);

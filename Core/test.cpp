@@ -454,7 +454,7 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
     //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
     bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
         param, rsp_content, 5);
-    if(success)
+    if(success && rsp_content.length() > 0)
     {
         //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
         LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
@@ -472,7 +472,7 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
         param);
     if(future)
     {
-        if(future->get(5, rsp_content))
+        if(future->get(5, rsp_content) && rsp_content.length() > 0)
         {
             LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         }

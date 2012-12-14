@@ -54,18 +54,21 @@ struct MsgTask
     MsgTask()
         :msgid(""),
         msgparam(),
-        callertid(0)
+        callertid(0),
+        ret(false)
     {
     }
     MsgTask(const std::string& lmsgid, MsgBusParam lparam, pthread_t fromtid)
         :msgid(lmsgid),
         msgparam(lparam),
-        callertid(fromtid)
+        callertid(fromtid),
+        ret(false)
     {
     }
     std::string msgid;
     MsgBusParam msgparam;
     pthread_t callertid;
+    bool ret;
 };
 
 
@@ -84,6 +87,7 @@ template<> void Param2CustomType(MsgBusParam param, std::string& result)
 
 // 消息总线存储消息的队列类型
 typedef std::deque<MsgTask> MsgTaskQueue;
+typedef std::vector<MsgTask> MsgTaskVec;
 // 存储了所有的还没处理的消息
 static MsgTaskQueue s_all_msgtask;
 // 需要等待同步处理的消息
@@ -121,8 +125,8 @@ ReadySendMsgResultT  s_ready_sendmsgs;
 core::common::condition s_ready_sendmsg_cond;
 core::common::locker  s_ready_sendmsg_locker;
 
-static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks);
-static bool ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskQueue& alltasks, const MsgHandlerStrongObjList& msg_handlers);
+static void SendMsgInMsgBusThread(const std::string& msgid, MsgTaskVec& alltasks);
+static void ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskVec& alltasks, const MsgHandlerStrongObjList& msg_handlers);
 
 // 启动线程池以及消息处理线程
 bool InitMsgBus(long hmainwnd)
@@ -181,14 +185,13 @@ bool PostMsg(const std::string& msgid, boost::shared_array<char> param, uint32_t
     return PostMsg(msgid, MsgBusParam(param, paramlen));
 }
 
-static bool ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskQueue& alltasks, const MsgHandlerStrongObjList& msg_handlers)
+static void ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskVec& alltasks, const MsgHandlerStrongObjList& msg_handlers)
 {
-    bool result = false;
-    int cnt = alltasks.size();
-    while(cnt-- > 0)
+    size_t cnt = alltasks.size();
+    for(size_t i = 0; i < cnt; ++i)
     {
-        MsgBusParam& param = alltasks.front().msgparam;
-        //alltasks.pop_front();
+        bool result = false;
+        MsgBusParam& param = alltasks[i].msgparam;
 
         MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
         bool is_continue = true;
@@ -221,14 +224,13 @@ static bool ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskQueue& alltas
                 break;
             ++hit;
         }
-
+        alltasks[i].ret = result;
         //g_log.Log(core::lv_debug, "process a sendmsg in msgbus onmsg :%lld, cnt:%d \n", (int64_t)core::utility::GetTickCount(), cnt);
     }
-    return result;
 }
 
 // process message in msgbus thread 
-static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltasks)
+static void SendMsgInMsgBusThread(const std::string& msgid, MsgTaskVec& alltasks)
 {
     assert(pthread_equal(pthread_self(), msgbus_tid));
     MsgHandlerStrongObjList msg_handlers;
@@ -262,7 +264,7 @@ static bool SendMsgInMsgBusThread(const std::string& msgid, MsgTaskQueue& alltas
             }
         }
     }
-    return ExecuteMsgBusHandlers(msgid, alltasks, msg_handlers);
+    ExecuteMsgBusHandlers(msgid, alltasks, msg_handlers);
 }
 // 同步处理，直接调用处理函数
 bool SendMsg(const std::string& msgid, MsgBusParam& param)
@@ -276,9 +278,11 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
     pthread_t callertid = pthread_self();
     if(pthread_equal(callertid, msgbus_tid) != 0)
     {
-        MsgTaskQueue taskqueue;
-        taskqueue.push_back(MsgTask(msgid, param, callertid));
-        return SendMsgInMsgBusThread(msgid, taskqueue);
+        MsgTaskVec task;
+        task.push_back(MsgTask(msgid, param, callertid));
+        SendMsgInMsgBusThread(msgid, task);
+        param = task.front().msgparam;
+        return task.front().ret;
     }
     else 
     {
@@ -327,11 +331,11 @@ bool SendMsg(const std::string& msgid, MsgBusParam& param)
         }
         if(can_call_directly)
         {
-            MsgTaskQueue taskqueue;
+            MsgTaskVec taskqueue;
             taskqueue.push_back(MsgTask(msgid, param, callertid));
-            bool ret = ExecuteMsgBusHandlers(msgid, taskqueue, msg_handlers);
+            ExecuteMsgBusHandlers(msgid, taskqueue, msg_handlers);
             param = taskqueue.back().msgparam;
-            return ret;
+            return taskqueue.back().ret;
         }
     }
 
@@ -490,7 +494,7 @@ void* MsgTaskProcessProc(void*)
     {
         if( s_msgbus_terminate )
             break;
-        MsgTaskQueue mtasks;
+        MsgTaskVec mtasks;
         MsgTask firsttask;
         std::string curmsgid;
         {
@@ -532,11 +536,11 @@ void* MsgTaskProcessProc(void*)
         if(s_msgbus_terminate)
             break;
         // 在消息处理线程中以同步的方式处理消息
-        bool ret = SendMsgInMsgBusThread(curmsgid, mtasks);
-        while(!mtasks.empty())
+        SendMsgInMsgBusThread(curmsgid, mtasks);
+        size_t task_num = mtasks.size();
+        for(size_t i = 0; i < task_num; ++i)
         {
-            firsttask = mtasks.front();
-            mtasks.pop_front();
+            firsttask = mtasks[i];
             boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo;
             if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
             {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
@@ -560,11 +564,12 @@ void* MsgTaskProcessProc(void*)
             core::common::locker_guard guard(sp_readyinfo->wait_lock);
             sp_readyinfo->ready = true;
             sp_readyinfo->rspparam = firsttask.msgparam;
-            sp_readyinfo->rspresult = ret;
+            sp_readyinfo->rspresult = firsttask.ret;
             //LOG(g_log, lv_debug, "notify sendmsg ready, tid:%lld, msg:%s, rspdata:%s", (uint64_t)firsttask.callertid,
             //    firsttask.msgid.c_str(), firsttask.msgparam.paramdata.get());
             sp_readyinfo->wait_cond.notify_all();
         }
+        MsgTaskVec().swap(mtasks);
     }
     s_msgbus_running = false;
     return 0;
