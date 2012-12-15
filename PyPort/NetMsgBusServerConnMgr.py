@@ -8,8 +8,8 @@ import asyncore, socket
 import time
 import logging
 from NetMsgBusDataDef import *
-#from NetMsgBusInterface import *
-from NetMsgBus import *
+from LocalMsgBus import *
+from NetMsgBus import *  # for protobuf Type
 
 logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(levelname)8s %(thread)d %(name)s %(message)s")
 log = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.connect( (server_ip, server_port) )
 
     def doloop(self):
-        asyncore.loop(timeout=1, count=1, map=self.sockmap)
+        asyncore.loop(timeout=5, count=1, map=self.sockmap)
         if self.need_stop:
             self.close()
             self.is_closed = True
@@ -162,7 +162,9 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         req.UnPackBody(bodybuffer)
         log.info('got message from server relay, from:%s, dest:%s, msgid:%d.', req.from_name, req.dest_name, req.msg_id)
         log.info('message content:%s.', req.GetMsgContent())
-        #NetMsgBusToLocalMsgBus(req.GetMsgContent());
+        # transfer netmsg_data to local msgbus data.
+        # find msgid and msgparam and msgsender for local msgbus
+        # g_msgbus.SendMsg(local_msg_id, local_msgparam);
 
     def HandleRspPBBody(self, bodybuffer):
         pbpack = MsgBusPackPBType()

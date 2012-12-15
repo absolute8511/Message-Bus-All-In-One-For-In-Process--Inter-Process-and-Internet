@@ -7,6 +7,7 @@ import asyncore, socket
 import time
 import logging
 from NetMsgBusDataDef import *
+import LocalMsgBus
 
 logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(levelname)8s %(thread)d %(name)s %(message)s")
 log = logging.getLogger(__name__)
@@ -56,19 +57,15 @@ class ReceiverChannel(asyncore.dispatcher):
         msg_pack.UnPackBody(msgcontent)
         # 消息格式必须是 msgid=消息标示串＆msgparam=具体的消息内容 
         # 具体的消息内容可以是JSON/XML数据格式(或者也可以是二进制数据)，具体由收发双方协定
-        # 第一次连接后必须先发一个包含msgsender的消息串表明自己的身份
-        if msg_pack.is_sync > 0:
-            log.debug("got a sync request, sid:%d, client:%s", msg_pack.sync_sid, self.addr)
+        if msg_pack.sync_sid > 0:
+            log.debug("got a receiver client request, syncflag:%d, sid:%d, client:%s", msg_pack.is_sync, msg_pack.sync_sid, self.addr)
             self.NetMsgBusRspSendMsg(msg_pack)
-        else:
-            log.debug('got a non sync sendmsg')
-            #NetMsgBusToLocalMsgBus(msgcontent);
 
     def NetMsgBusRspSendMsg(self, msg_pack):
         msgid = ReceiverMsgUtil.GetMsgId(msg_pack.data)
         if len(msgid) > 0:
             msgparam = ReceiverMsgUtil.GetMsgParam(msg_pack.data)
-            # SendMsg(msgid, msgparam)
+            msgparam = LocalMsgBus.g_msgbus.SendMsg(msgid, msgparam)
             rsp_pack = ReceiverSendMsgRsp()
             rsp_pack.sync_sid = msg_pack.sync_sid
             rsp_pack.SetRspData(msgparam)
@@ -100,7 +97,7 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
 
     def doloop(self):
         try:
-            asyncore.loop(timeout=1, count=1, map=self.sockmap)
+            asyncore.loop(timeout=5, count=1, map=self.sockmap)
         except:
             log.info('receiver server loop exception')
 
