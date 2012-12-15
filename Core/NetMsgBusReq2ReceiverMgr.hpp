@@ -68,7 +68,7 @@ struct Req2ReceiverTask
     }
     std::string clientname;
     bool sync;
-    uint32_t future_id;
+    uint32_t future_id;   // note: 0 is reserved for non-future rsp need.
     bool retry;
     uint32_t data_len;
     boost::shared_array<char> data;
@@ -214,8 +214,6 @@ public:
             m_req2receiver_tid = 0;
             return false;
         }
-        //boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        //EventLoopPool::CreateEventLoop("sendmsg_event_loop", spwaiter);
         AddHandler("netmsgbus.server.getclient", &Req2ReceiverMgr::HandleRspGetClient, 0);
         while(!m_req2receiver_running)
         {
@@ -238,7 +236,6 @@ public:
         }
         RemoveAllHandlers();
         EventLoopPool::TerminateLoop("postmsg_event_loop");
-        //EventLoopPool::TerminateLoop("sendmsg_event_loop");
     }
 
 private:
@@ -333,8 +330,7 @@ private:
                 return readedlen;
             boost::shared_ptr<NetFuture> ready_sendmsg_rsp;
             {
-                //printf("one sync data returned. sid:%u.\n", future_sid);
-                //g_log.Log(lv_debug, "sync data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), future_sid, sp_tcp->GetFD());
+                //g_log.Log(lv_debug, "receiver future data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), future_sid, sp_tcp->GetFD());
                 core::common::locker_guard guard(m_rsp_sendmsg_lock);
                 boost::unordered_map<uint32_t, boost::shared_ptr<NetFuture> >::iterator future_it = m_sendmsg_rsp_container.find(future_sid);
                 if(future_it == m_sendmsg_rsp_container.end())
@@ -359,25 +355,20 @@ private:
 
     bool Req2Receiver_onSend(TcpSockSmartPtr sp_tcp)
     {
-        //printf("sendmsg data has been sended to other client.fd:%d\n", sp_tcp->GetFD());
         return true;
     }
 
     void Req2Receiver_onClose(TcpSockSmartPtr sp_tcp)
     {
-        //core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        //m_sendmsg_rsp_container.erase(sp_tcp->GetFD());
         //printf("req2receiver tcp disconnected.\n");
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
-
         safe_clear_bad_future();
     }
     void Req2Receiver_onError(TcpSockSmartPtr sp_tcp)
     {
-        perror("sendmsg_error ");
         // you can notify the high level to handle the error, retry or just ignore.
-        printf("client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
+        LOG(g_log, lv_error, "client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         safe_clear_bad_future();
@@ -386,20 +377,16 @@ private:
     {
         Req2ReceiverTask identifytask;
         identifytask.sync = 0;
-        std::string netmsg_str;
         string sendername;
         if(m_server_connmgr)
         {
             sendername = m_server_connmgr->GetClientName();
         }
-        EncodeMsgKeyValue(sendername);
-        netmsg_str = "msgsender=" + sendername;
-        uint32_t netmsg_len = netmsg_str.size();
-        boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-        memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
+        MsgBusParam netmsg_param;
+        GenerateNetMsgContent("", netmsg_param, sendername, netmsg_param);
         identifytask.future_id = 0;
-        identifytask.data = netmsg_data;
-        identifytask.data_len = netmsg_len;
+        identifytask.data = netmsg_param.paramdata;
+        identifytask.data_len = netmsg_param.paramlen;
         string rsp;
         return WriteTaskDataToReceiver(sp_tcp, identifytask, rsp);
     }
@@ -441,12 +428,8 @@ private:
             }
             else
                 result = cur_sendmsg_rsp->get(task.timeout, rsp_content);
-            // close sync Tcp, remove the tcp in onClose event.
-            // changed: do not close for later reuse, now sync request can be seperate by sessionid 
-            // in the same tcp.
-            // sp_tcp->DisAllowSend();
             //g_log.Log(lv_debug, "end send sync data to client:%lld, sid:%u\n", (int64_t)core::utility::GetTickCount(), waiting_futureid);
-            // erase in on read event.
+            // future will erase in on-read event.
             //core::common::locker_guard guard(m_rsp_sendmsg_lock);
             //m_sendmsg_rsp_container.erase(waiting_futureid);
         }

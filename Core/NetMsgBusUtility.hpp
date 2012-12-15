@@ -120,6 +120,21 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
     return false;
 }
 
+inline void GenerateNetMsgContent(const std::string& msgid, MsgBusParam param, const std::string& msgsender,
+    MsgBusParam& netmsg_data)
+{
+    std::string netmsg_str(param.paramdata.get(), param.paramlen);
+    std::string encodemsgid = msgid;
+    std::string encode_msgsender = msgsender;
+    EncodeMsgKeyValue(encodemsgid);
+    EncodeMsgKeyValue(netmsg_str);
+    EncodeMsgKeyValue(encode_msgsender);
+    netmsg_str = "msgid=" + encodemsgid + "&msgparam=" + netmsg_str + "&msgsender=" + encode_msgsender;
+    netmsg_data.paramlen = netmsg_str.size();
+    netmsg_data.paramdata.reset(new char[netmsg_data.paramlen]);
+    memcpy(netmsg_data.paramdata.get(), netmsg_str.data(), netmsg_data.paramlen);
+}
+
 // response to the client who has send a msg using sync mode.
 inline void NetMsgBusRspSendMsg(TcpSockSmartPtr sp_tcp, const std::string& netmsgbus_msgcontent, uint32_t sync_sid)
 {

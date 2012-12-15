@@ -602,28 +602,21 @@ bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid,
 {
     // contruct the data which will be send to the network
     // data is like : msgid=XXXXXXXX&msgparam=XXXXXXXXXX
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
-
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, dest_name, netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
     if(dest_name == "")
     {
         //g_log.Log(lv_debug, "broadcast msgid:%s", msgid.c_str());
-        return msgbus_postmsg_broadcast(netmsg_len, netmsg_data);
+        return msgbus_postmsg_broadcast(netmsg_len, netmsg_param.paramdata);
     }
     else if(sendtype == SendDirectToClient)
     {
-        return msgbus_postmsg_direct_to_client(dest_name, netmsg_len, netmsg_data) != NULL;
+        return msgbus_postmsg_direct_to_client(dest_name, netmsg_len, netmsg_param.paramdata) != NULL;
     }
     else if(sendtype == SendUseServerRelay)
     {
-        return msgbus_postmsg_use_server_relay(dest_name, netmsg_len, netmsg_data);
+        return msgbus_postmsg_use_server_relay(dest_name, netmsg_len, netmsg_param.paramdata);
     }
     else
     {
@@ -635,19 +628,11 @@ bool NetMsgBusSendMsg(const std::string& dest_name, const std::string& msgid,
 bool NetMsgBusSendMsg(const std::string& dest_ip, unsigned short dest_port, const std::string& msgid,
    MsgBusParam param)
 {
-    // contruct the data which will be send to the network
-    // data is like : msgid=XXXXXXXX&msgparam=XXXXXXXXXX
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, "", netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
 
-    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_data) != NULL;
+    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata) != NULL;
 }
 
 bool NetMsgBusQueryHostInfo(const std::string& clientname)
@@ -657,61 +642,36 @@ bool NetMsgBusQueryHostInfo(const std::string& clientname)
 
 boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param)
 {
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
-    return msgbus_postmsg_direct_to_client(clientname, netmsg_len, netmsg_data);
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, clientname, netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
+    return msgbus_postmsg_direct_to_client(clientname, netmsg_len, netmsg_param.paramdata);
 }
 boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& dest_ip,
    unsigned short dest_port, const std::string& msgid, MsgBusParam param)
 {
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
-    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_data);
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, "", netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
+    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata);
 }
 
 bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, 
     std::string& rsp_data, int32_t timeout_sec)
 {
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
-
-    return msgbus_sendmsg_direct_to_client(clientname, netmsg_len, netmsg_data, rsp_data, timeout_sec);
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, clientname, netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
+    return msgbus_sendmsg_direct_to_client(clientname, netmsg_len, netmsg_param.paramdata, rsp_data, timeout_sec);
 }
 bool NetMsgBusGetData(const std::string& dest_ip, unsigned short dest_port, const std::string& msgid, MsgBusParam param, 
     std::string& rsp_data, int32_t timeout_sec)
 {
-    assert(param.paramlen);
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    netmsg_str = "msgid=" + msgid + "&msgparam=" + netmsg_str;
-    uint32_t netmsg_len = netmsg_str.size();
-    boost::shared_array<char> netmsg_data(new char[netmsg_len]);
-    memcpy(netmsg_data.get(), netmsg_str.data(), netmsg_len);
+    MsgBusParam netmsg_param;
+    GenerateNetMsgContent(msgid, param, "", netmsg_param);
+    uint32_t netmsg_len = netmsg_param.paramlen;
 
-    return msgbus_sendmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_data, rsp_data, timeout_sec);
+    return msgbus_sendmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata, rsp_data, timeout_sec);
 }
 
 int  NetMsgBusQueryServices(const std::string& match_str)
