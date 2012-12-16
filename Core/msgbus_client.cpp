@@ -109,6 +109,17 @@ bool msgbus_query_available_services(const std::string& match_str)
 
 bool init_netmsgbus_client(const std::string& serverip, unsigned short int serverport)
 {
+#if defined (__APPLE__) || defined (__MACH__) 
+    boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+#else
+    boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
+#endif
+
+    if(!EventLoopPool::CreateEventLoop(NETMSGBUS_EVLOOP_NAME, spwaiter))
+    {
+        return false;
+    }
+
     if(!s_server_connmgr.StartServerCommunicateLoop(serverip, serverport))
     {
         // load local static client info.
@@ -125,15 +136,25 @@ bool init_netmsgbus_client(const std::string& serverip, unsigned short int serve
 
     return true;
 }
-void destroy_netmsgbus_client()
+
+void disconnect_from_server()
 {
     msgbus_unregister_client_receiver();
+    s_server_connmgr.StopServerConnection();
+}
+
+void destroy_netmsgbus_client()
+{
     s_receiver_mgr.StopReceiver();
     if(sp_req2receiver_mgr)
         sp_req2receiver_mgr->Stop();
-    s_server_connmgr.StopServerConnection();
+    disconnect_from_server();
     if(sp_req2receiver_mgr)
         sp_req2receiver_mgr->SetServerConnMgr(NULL);
+    
+    EventLoopPool::TerminateLoop(NETMSGBUS_EVLOOP_NAME);
+    MsgHandlerMgr::DropInstance(sp_req2receiver_mgr->ClassName());
+    sp_req2receiver_mgr.reset();
 }
 
 } // end of namespace NetMsgBus

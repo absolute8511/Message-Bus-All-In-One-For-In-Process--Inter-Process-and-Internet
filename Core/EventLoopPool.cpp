@@ -141,9 +141,22 @@ bool EventLoopPool::AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp)
     }
     if(!addedev)
         return false;
-    addedev->AddTcpSockToLoop(sp_tcp);
+    return addedev->AddTcpSockToLoop(sp_tcp);
     //g_log.Log(lv_debug, "inner tcp num:%d .", addedev->GetActiveTcpNum());
-    return true;
+}
+
+bool EventLoopPool::AddTcpSockToLoop(const std::string& loopname, TcpSockSmartPtr sp_tcp)
+{
+    core::common::locker_guard guard(m_pool_locker);
+    EventLoopContainerT::iterator it = m_eventloop_pool.find(loopname);
+    if(it != m_eventloop_pool.end())
+    {
+        if(it->second.eventloop)
+        {
+            return it->second.eventloop->AddTcpSockToLoop(sp_tcp);
+        }
+    }
+    return false;
 }
 
 boost::shared_ptr<EventLoop> EventLoopPool::GetEventLoop(const std::string& name)

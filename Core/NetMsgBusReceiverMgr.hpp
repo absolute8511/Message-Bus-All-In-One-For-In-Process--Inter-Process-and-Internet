@@ -194,8 +194,7 @@ private:
                     newtcp->SetNonBlock();
                     newtcp->SetCloseAfterExec();
                     newtcp->SetTimeout(KEEP_ALIVE_TIME);
-                    EventLoopPool::AddTcpSockToInnerLoop(newtcp);
-                    //spwaiter->AddTcpSock(newtcp);
+                    EventLoopPool::AddTcpSockToLoop(NETMSGBUS_EVLOOP_NAME, newtcp);
                 }
             }
         }

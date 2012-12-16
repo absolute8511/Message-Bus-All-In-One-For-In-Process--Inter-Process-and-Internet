@@ -487,14 +487,20 @@ private:
             callback.onClose = boost::bind(&Req2ReceiverMgr::Req2Receiver_onClose, this, _1);
             callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
 
+            std::string loopname;
             if(ev_waiter == NULL)
             {
-                g_log.Log(lv_info, "NULL event waiter. use the inner eventloop in the pool.");
+                g_log.Log(lv_info, "NULL event waiter. use the default netmsgbus eventloop in the pool.");
+                loopname = NETMSGBUS_EVLOOP_NAME;
+            }
+            else
+            {
+                loopname = "postmsg_event_loop";
             }
             // first identify me to the receiver.
             //IdentiySelfToReceiver(newtcp);
             bool ret;
-            ret = pclient_conn_pool->CreateTcpSock(ev_waiter.get(), destclient.host_ip, destclient.host_port, CLIENT_POOL_SIZE, 
+            ret = pclient_conn_pool->CreateTcpSock(loopname, destclient.host_ip, destclient.host_port, CLIENT_POOL_SIZE, 
                 task.timeout, callback, boost::bind(&Req2ReceiverMgr::IdentiySelfToReceiver, this, _1));
             if(!ret)
             {

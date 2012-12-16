@@ -687,9 +687,9 @@ void testremotemsgbus()
         {
             if(s_break)
                 break;
-            //testremotemsgbus_broadcast_sub(param, longdata);
-            //testremotemsgbus_direct_sub(param, longdata);
-            //testremotemsgbus_relay_sub(param, longdata);
+            testremotemsgbus_broadcast_sub(param, longdata);
+            testremotemsgbus_direct_sub(param, longdata);
+            testremotemsgbus_relay_sub(param, longdata);
             
             sendcounter++;
             if(sendcounter % 10 == 0)
@@ -713,7 +713,7 @@ void testremotemsgbus()
             break;
         sleep(1);
     }
-    NetMsgBusDisConnect();
+    NetMsgBusDisConnectFromServer();
 }
 
 void testSyncGetData()
@@ -969,10 +969,11 @@ int main()
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
     //testconcurrent_local();
-    //testremotemsgbus();
-    testremotemsgbus_without_server();
+    testremotemsgbus();
+    //testremotemsgbus_without_server();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
+    NetMsgBusDisConnectAll();
     DestroyMsgBus();
     threadpool::destroy_thread_pool();
     printf("leave thread pool and msgbus.\n");

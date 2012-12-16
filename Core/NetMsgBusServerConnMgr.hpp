@@ -99,16 +99,11 @@ public:
         boost::shared_array<char> param(new char[1]);
         param[0] = '\0';
         PostMsg("netmsgbus.server.reqdata.sendfinished", param, 1);
-        //sp_tcp->SetTimeout(KEEP_ALIVE_TIME);
         return true;
     }
 
     size_t ServerRspProcess(TcpSockSmartPtr sp_tcp, const char* pdata, size_t size)
     {
-        //if(size > 0)
-        //{
-        //    sp_tcp->SetTimeout(KEEP_ALIVE_TIME);
-        //}
         size_t readedlen = 0;
         while(true)
         {
@@ -182,18 +177,11 @@ public:
         callback.onClose = boost::bind(&ServerConnMgr::onServerTcpClose, this, _1);
         callback.onError = boost::bind(&ServerConnMgr::onServerTcpError, this, _1);
         callback.onTimeout = boost::bind(&ServerConnMgr::onServerTimeout, this, _1);
-//
-//#if defined (__APPLE__) || defined (__MACH__) 
-//        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-//#else
-//        boost::shared_ptr<SockWaiterBase> spwaiter(new EpollWaiter());
-//#endif
         m_server_tcp->SetNonBlock();
         m_server_tcp->SetCloseAfterExec();
         m_server_tcp->SetSockHandler(callback);
         m_server_tcp->SetTimeout(KEEP_ALIVE_TIME);
-        //spwaiter->AddTcpSock(m_server_tcp);
-        EventLoopPool::AddTcpSockToInnerLoop(m_server_tcp);
+        EventLoopPool::AddTcpSockToLoop(NETMSGBUS_EVLOOP_NAME, m_server_tcp);
         return true;
     }
     void StopServerConnection()
@@ -233,10 +221,6 @@ public:
     {
         // register has success.
         MsgBusRegisterRsp reg_rsp;
-        //assert((rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME) > 0);
-        //boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(reg_rsp.err_msg_len) - sizeof(reg_rsp.ret_code) - MAX_SERVICE_NAME]);
-
-        //reg_rsp.err_msg = msgbuf.get();
         reg_rsp.UnPackBody(rsp_body.data(), rsp_body.size());
         boost::shared_array<char>  rspdata(new char[MAX_SERVICE_NAME]);
         strncpy(rspdata.get(), reg_rsp.service_name, MAX_SERVICE_NAME);
@@ -272,8 +256,6 @@ public:
     {// 本客户端通过服务器向其他客户端转发消息得到的服务器返回确认
         MsgBusSendMsgRsp rsp;
         //assert(rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len));
-        //boost::shared_array<char> err_msg_buf(new char[rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len)]);
-        //rsp.err_msg = err_msg_buf.get();
         rsp.UnPackBody(rsp_body.data(), rsp_body.size());
         if(rsp.ret_code == 0)
         {
@@ -287,8 +269,6 @@ public:
     {// 收到服务器转发的其他客户端的发消息请求
         MsgBusSendMsgReq req;
         //assert(rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
-        //boost::shared_array<char> msgbuf(new char[rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2]);
-        //req.msg_content = msgbuf.get();
         req.UnPackBody(rsp_body.data(), rsp_body.size());
         if(!FilterMgr::FilterBySender(req.from_name))
         {
@@ -308,10 +288,6 @@ public:
     {
         g_log.Log(lv_debug, "query services response:%s", rsp_body.c_str());
         MsgBusPackPBType pbpack;
-        //boost::shared_array<char> tmpbuf(new char[rsp_body.size()]);
-        //pbpack.pbtype = tmpbuf.get();
-        //boost::shared_array<char> tmpbuf2(new char[rsp_body.size()]);
-        //pbpack.pbdata = tmpbuf2.get();
 
         pbpack.UnPackBody(rsp_body.data(), rsp_body.size());
         string pbtype(pbpack.GetPBType());

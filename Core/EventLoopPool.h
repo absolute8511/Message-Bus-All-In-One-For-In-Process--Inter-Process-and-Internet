@@ -22,6 +22,7 @@ public:
 
     //boost::shared_ptr< EventLoop > GetInnerEventLoop(TcpSockSmartPtr sp_tcp);
     static bool AddTcpSockToInnerLoop(TcpSockSmartPtr sp_tcp);
+    static bool AddTcpSockToLoop(const std::string& loopname, TcpSockSmartPtr sp_tcp);
 
 private:
     EventLoopPool();

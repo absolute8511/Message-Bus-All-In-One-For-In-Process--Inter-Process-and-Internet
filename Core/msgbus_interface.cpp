@@ -588,7 +588,12 @@ int  NetMsgBusRegReceiver(const std::string& name, const std::string& hostip, un
     return 0;
 }
 
-void NetMsgBusDisConnect()
+void NetMsgBusDisConnectFromServer()
+{
+    disconnect_from_server();
+}
+
+void NetMsgBusDisConnectAll()
 {
     destroy_netmsgbus_client();
 }

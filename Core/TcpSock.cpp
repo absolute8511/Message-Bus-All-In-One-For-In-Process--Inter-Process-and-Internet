@@ -238,6 +238,7 @@ void TcpSock::Close(bool needremove)
         m_evloop = NULL;
     }
 
+    m_sockcb.clear();
     //m_outbuf.insert(m_outbuf.end(), m_tmpoutbuf.begin(), m_tmpoutbuf.end());
     if(!m_outbuf.empty() /*&& (write(m_fd, &m_outbuf[0], m_outbuf.size()) != (int)m_outbuf.size())*/)
     {

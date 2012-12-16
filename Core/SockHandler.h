@@ -31,6 +31,14 @@ struct SockHandler
         onTimeout(NULL)
     {
     }
+    void clear()
+    {
+        onClose = NULL;
+        onRead = NULL;
+        onSend = NULL;
+        onError = NULL;
+        onTimeout = NULL;
+    }
 };
 
 } }

@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
+#define NETMSGBUS_EVLOOP_NAME "evloop_for_netmsgbus"
+
 using namespace core::net;
 
 namespace NetMsgBus

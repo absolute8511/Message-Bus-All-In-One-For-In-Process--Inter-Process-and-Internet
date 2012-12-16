@@ -36,6 +36,7 @@ bool msgbus_query_available_services(const std::string& match_str);
 
 bool init_netmsgbus_client(const std::string& serverip, unsigned short int serverport);
 void destroy_netmsgbus_client();
+void disconnect_from_server();
 
 }
 

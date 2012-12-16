@@ -120,7 +120,9 @@ namespace NetMsgBus
     void UnRegisterMsg(const std::string& msgid, IMsgHandler* p_handler_obj);
     // connect the netmsgbus server before do something related to netmsgbus.
     int  NetMsgBusConnectServer(const std::string& serverip, unsigned short int serverport);
-    void NetMsgBusDisConnect();
+
+    void NetMsgBusDisConnectFromServer();
+    void NetMsgBusDisConnectAll();
     // register a receiver on the netmsgbus so that the client can receive messages from other client.
     int  NetMsgBusRegReceiver(const std::string& name, const std::string& hostip, unsigned short& hostport);
     // send messages to a client connected with netmsgbus server. Use empty dest_name to broadcast messages on the netmsgbus.
