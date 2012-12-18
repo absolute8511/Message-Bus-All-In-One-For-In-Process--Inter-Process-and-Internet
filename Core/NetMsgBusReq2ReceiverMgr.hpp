@@ -135,7 +135,7 @@ public:
         std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
         task.future_id = future.first;
         // sync sendmsg will not retry to update client info if failed to send message.
-        return ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase>(), task, rsp_content);
+        return ProcessReqToReceiver(task, rsp_content);
     }
 
     bool SendMsgDirectToClient(const std::string& clientname, uint32_t data_len, 
@@ -154,7 +154,7 @@ public:
         std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
         task.future_id = future.first;
         // sync sendmsg will not retry to update client info if failed to send message.
-        return ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase>(), task, rsp_content);
+        return ProcessReqToReceiver(task, rsp_content);
     }
 
     boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& dest_ip, unsigned short dest_port,
@@ -437,7 +437,7 @@ private:
     }
 
     // 处理特定的到某个客户端的请求,retry stand for if failed to send the data , whether to update the client host info and resend the data.
-    bool ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase> ev_waiter, const Req2ReceiverTask& task, string& rsp_content)
+    bool ProcessReqToReceiver(const Req2ReceiverTask& task, string& rsp_content)
     {
         LocalHostInfo destclient;
         if(task.clientname.empty())
@@ -488,7 +488,7 @@ private:
             callback.onError = boost::bind(&Req2ReceiverMgr::Req2Receiver_onError, this, _1);
 
             std::string loopname;
-            if(ev_waiter == NULL)
+            if(task.sync)
             {
                 g_log.Log(lv_info, "NULL event waiter. use the default netmsgbus eventloop in the pool.");
                 loopname = NETMSGBUS_EVLOOP_NAME;
@@ -537,10 +537,10 @@ private:
     }
 
     // 不关心返回值的处理到客户端请求
-    void ProcessReqToReceiver(boost::shared_ptr<SockWaiterBase> ev_waiter, const Req2ReceiverTask& task)
+    void ProcessReqToReceiver(const Req2ReceiverTask& task)
     {
         std::string tmp;
-        ProcessReqToReceiver(ev_waiter, task, tmp);
+        ProcessReqToReceiver(task, tmp);
     }
 
     // 专门用于处理向其它客户端异步的发送消息
@@ -553,8 +553,7 @@ private:
             return 0;
         }
         req2recv_mgr->m_req2receiver_running = true;
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        EventLoopPool::CreateEventLoop("postmsg_event_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("postmsg_event_loop");
         while(true)
         {
             Req2ReceiverTask rtask;
@@ -586,7 +585,7 @@ private:
                 thread_name = rtask.clientname.substr(rtask.clientname.size() - 2);
             }
             // in order to make sure the order of sendmsg , we should use the same thread to process the same client name sendmsg.
-            threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, spwaiter, rtask),
+            threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, rtask),
                 "ProcessReqToReceiver" + thread_name);
         }
         req2recv_mgr->m_req2receiver_running = false;

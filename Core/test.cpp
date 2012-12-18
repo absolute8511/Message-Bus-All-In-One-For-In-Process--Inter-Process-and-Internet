@@ -3,8 +3,6 @@
 #include "MsgHandlerMgr.h"
 #include "NetMsgBusFilterMgr.h"
 #include "EventLoopPool.h"
-#include "TcpSock.h"
-#include "SelectWaiter.h"
 #include "SimpleLogger.h"
 #include "NetMsgBusFuture.hpp"
 
@@ -865,8 +863,7 @@ private:
 public:
     TestEventLoop()
     {
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        EventLoopPool::CreateEventLoop("test_event_loop", spwaiter);
+        EventLoopPool::CreateEventLoop("test_event_loop");
     }
     size_t test_onRead(TcpSockSmartPtr sp, const char* pdata, size_t size)
     {
@@ -888,13 +885,7 @@ public:
     }
     bool testLoop()
     {
-        boost::shared_ptr<SockWaiterBase> spwaiter;
         if(!EventLoopPool::GetEventLoop("test_event_loop"))
-        {
-            return false;
-        }
-        spwaiter = EventLoopPool::GetEventLoop("test_event_loop")->GetEventWaiter();
-        if(!spwaiter)
         {
             return false;
         }
@@ -923,7 +914,7 @@ public:
         printf("connected.\n");
         m_pConnection->SetNonBlock();
         m_pConnection->SetCloseAfterExec();
-        spwaiter->AddTcpSock(m_pConnection);
+        EventLoopPool::AddTcpSockToLoop("test_event_loop", m_pConnection);
         return true;
     }
 };

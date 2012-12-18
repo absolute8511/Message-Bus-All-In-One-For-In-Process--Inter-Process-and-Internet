@@ -70,8 +70,14 @@ void EventLoopPool::DestroyEventLoopPool()
     // so we must clear the event loop after the loop finished.
     m_eventloop_pool.clear();
 }
-bool EventLoopPool::CreateEventLoop(const std::string& name, boost::shared_ptr<SockWaiterBase> spwaiter)
+bool EventLoopPool::CreateEventLoop(const std::string& name)
 {
+#if defined (__APPLE__) || defined (__MACH__) 
+        boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+#else
+        //boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
+        boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
+#endif
     core::common::locker_guard guard(m_pool_locker);
     if(m_eventloop_pool.find(name) != m_eventloop_pool.end())
     {// already created, just return true to indicate sucess.

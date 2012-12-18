@@ -109,13 +109,7 @@ bool msgbus_query_available_services(const std::string& match_str)
 
 bool init_netmsgbus_client(const std::string& serverip, unsigned short int serverport)
 {
-#if defined (__APPLE__) || defined (__MACH__) 
-    boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
-#else
-    boost::shared_ptr< SockWaiterBase > spwaiter(new EpollWaiter());
-#endif
-
-    if(!EventLoopPool::CreateEventLoop(NETMSGBUS_EVLOOP_NAME, spwaiter))
+    if(!EventLoopPool::CreateEventLoop(NETMSGBUS_EVLOOP_NAME))
     {
         return false;
     }

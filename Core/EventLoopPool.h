@@ -16,7 +16,7 @@ class EventLoopPool : private boost::noncopyable
 public:
     static bool  InitEventLoopPool(int tcp_in_each_innerloop = 0);
     static void  DestroyEventLoopPool();
-    static bool CreateEventLoop(const std::string& name, boost::shared_ptr<SockWaiterBase> spwaiter);
+    static bool CreateEventLoop(const std::string& name);
     static void TerminateLoop(const std::string& name);
     static boost::shared_ptr< EventLoop > GetEventLoop(const std::string& name);
 
