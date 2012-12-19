@@ -2,7 +2,6 @@
 # -*- coding: utf8 -*- 
 
 import threading
-from socket import *
 import asyncore, socket
 import time
 import logging
@@ -65,7 +64,10 @@ class ReceiverChannel(asyncore.dispatcher):
         msgid = ReceiverMsgUtil.GetMsgId(msg_pack.data)
         if len(msgid) > 0:
             msgparam = ReceiverMsgUtil.GetMsgParam(msg_pack.data)
-            msgparam = LocalMsgBus.g_msgbus.SendMsg(msgid, msgparam)
+            msgparam = LocalMsgBus.SendMsg(msgid, msgparam)
+            if msgparam is None:
+                log.debug('handle receiver msgid %s request failed. ', msgid)
+                msgparam = ''
             rsp_pack = ReceiverSendMsgRsp()
             rsp_pack.sync_sid = msg_pack.sync_sid
             rsp_pack.SetRspData(msgparam)
@@ -132,20 +134,6 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
         self.is_closed = True
         log.info('receiver server %s closed', self.server_ip)
         return True
-
-    def handle_accept(self):
-        pair = self.accept()
-        if pair is None:
-            pass
-        else:
-            conn, addr = pair
-            log.info('new client connected to receiver: %s', addr)
-            ReceiverChannel(conn, addr, self.sockmap)
-
-    def handle_close(self):
-        self.close()
-        self.is_closed = True
-        log.info('receiver server %s closed', self.server_ip)
 
     def handle_error(self):
         self.close()

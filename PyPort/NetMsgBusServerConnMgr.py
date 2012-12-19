@@ -3,7 +3,6 @@
 
 import string
 import threading
-from socket import *
 import asyncore, socket
 import time
 import logging
@@ -141,9 +140,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             dest_port = rsp.dest_host.server_port
             dest_clientname = rsp.dest_name
             log.info('get client info returned. ret name: %s, ip:port : %s:%d', dest_clientname, dest_ip, dest_port)
-            #    core::common::locker_guard guard(m_cached_receiver_locker);
-            #    m_cached_client_info[clientname] = hostinfo;
-            #
+            LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', [dest_clientname, (dest_ip, dest_port)])
         else:
             log.info('msgbus server return error while get client info, ret_code: %d.', rsp.ret_code)
 
@@ -164,7 +161,12 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         log.info('message content:%s.', req.GetMsgContent())
         # transfer netmsg_data to local msgbus data.
         # find msgid and msgparam and msgsender for local msgbus
-        # g_msgbus.SendMsg(local_msg_id, local_msgparam);
+        netmsgdata = req.GetMsgContent()
+        msgid = ReceiverMsgUtil.GetMsgId(netmsgdata)
+        if msgid == '':
+            log.debug('empty msgid from server relay message.')
+            return
+        LocalMsgBus.SendMsg(msgid, ReceiverMsgUtil.GetMsgParam(netmsgdata));
 
     def HandleRspPBBody(self, bodybuffer):
         pbpack = MsgBusPackPBType()

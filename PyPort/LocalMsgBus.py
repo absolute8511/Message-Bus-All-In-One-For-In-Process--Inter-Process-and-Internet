@@ -114,3 +114,29 @@ class MsgBus:
         return self.DoMsgHandler(msgid, msgparam, strong_handlers)
 
 g_msgbus = MsgBus()
+
+def SendMsg(msgid, msgparam):
+    return g_msgbus.SendMsg(msgid, msgparam)
+
+def AddHandler(msgid, handler):
+    return g_msgbus.AddHandler(msgid, handler)
+
+def RemoveHandler(msgid, handler):
+    return g_msgbus.RemoveHandler(msgid, handler)
+
+class MsgBusHandlerBase:
+    def __init__(self):
+        self.all_dispatchers = {}
+
+    def AddHandler(self, msgid, dispatcher):
+        if not callable(dispatcher):
+            log.debug('dispatcher in handler object is not callable')
+            return False
+        self.all_dispatchers[msgid] = dispatcher
+        return AddHandler(msgid, self)
+
+    def OnMsg(self, msgid, msgparam):
+        if msgid not in self.all_dispatchers.keys():
+            log.debug('msgid :%s not found in dispatchers', msgid)
+            return
+        return self.all_dispatchers[msgid](msgid, msgparam)

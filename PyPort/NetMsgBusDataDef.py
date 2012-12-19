@@ -420,7 +420,7 @@ class ReceiverMsgUtil:
     @staticmethod
     def EncodeMsgKeyValue(orig_value):
         # replace % and &
-        return orig_value.raplace('%', '%25').replace('&', '%26')
+        return orig_value.replace('%', '%25').replace('&', '%26')
 
     @staticmethod
     def DecodeMsgKeyValue(orig_value):

@@ -195,7 +195,7 @@ static void ExecuteMsgBusHandlers(const std::string& msgid, MsgTaskVec& alltasks
 
         MsgHandlerStrongObjList::const_iterator hit = msg_handlers.begin();
         bool is_continue = true;
-        assert(param.paramlen);
+        //assert(param.paramlen);
         // make a copy of param to prevent interfering with other msg handlers.
         MsgBusParam original_param = param.DeepCopy();
 
@@ -408,7 +408,7 @@ bool PostMsg(const std::string& msgid, MsgBusParam param)
         assert(s_msgbus_running);
         return false;
     }
-    assert(param.paramlen);
+    //assert(param.paramlen);
     core::common::locker_guard guard(s_msgtask_locker);
     // post message will be processed in the thread of msgbus.
     s_all_msgtask.push_back(MsgTask(msgid, param.DeepCopy(), msgbus_tid));
