@@ -13,6 +13,7 @@
 #include <vector>
 #include <map>
 #include <stdlib.h>
+#include <inttypes.h>
 
 using std::string;
 using std::wstring;
@@ -41,7 +42,7 @@ public:
     {
         char str_longlong[sizeof(value) * 2 + 1];
         memset(str_longlong, 0, sizeof(value) * 2 + 1);
-        snprintf(str_longlong, sizeof(value)*2 + 1, "%llx", value);
+        snprintf(str_longlong, sizeof(value)*2 + 1, "%"PRIx64"", value);
         put_Str(key, str_longlong);
     }
     void put_WStr(const std::string& key, const std::wstring& value)

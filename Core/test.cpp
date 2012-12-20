@@ -346,7 +346,7 @@ void testlocalmsgbus_sendmsg()
         SendMsg("msg_testMsgBus1", param);
     }
     int64_t endtime = utility::GetTickCount();
-    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
+    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%" PRIu64 ", used time:%" PRId64 ", (start,end):(%" PRId64 ",%" PRId64 ")\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
     printf("finished local message bus test.\n");
 }
 
@@ -402,7 +402,7 @@ void testlocalmsgbus_postmsg()
         //printAllMsgHandler("msg_testMsgBus1");
     }
     int64_t endtime = utility::GetTickCount();
-    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%llu, used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
+    g_log.Log(lv_warn, "test 10000 sendmsg local in thread:%" PRIu64 ", used time:%" PRId64 ", (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), endtime - starttime, starttime, endtime);
     printf("finished local message bus test.\n");
 }
 
@@ -487,7 +487,6 @@ void testremotemsgbus_without_server()
     {
         //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0);
         //thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
-        unsigned short suggest_port = 0;
         printf("press any key other than 'q' to start send test message to netmsgbus.\n");
         core::XParam xp;
         xp.put_Int("testkey", 100);
@@ -509,17 +508,17 @@ void testremotemsgbus_without_server()
 
         GenerateNextTestParam(param);
         std::string rsp_content;
-        //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
+        //printf("begin get data:%" PRId64 "\n", (int64_t)core::utility::GetTickCount());
         bool success = NetMsgBusGetData("127.0.0.1", 9100, "msg_netmsgbus_testgetdata",
             param, rsp_content, 5);
         if(success && rsp_content.length() > 0)
         {
-            //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
-            LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+            //printf("end get data:%" PRId64 "\n", (int64_t)core::utility::GetTickCount());
+            LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%" PRIu64 ", data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         }
         else
         {
-            g_log.Log(lv_debug, "timeout err get net data in thread:%llu", (uint64_t)pthread_self());
+            g_log.Log(lv_debug, "timeout err get net data in thread:%" PRIu64 "", (uint64_t)pthread_self());
             s_break = true;
         }
         sleep(1);
@@ -529,16 +528,16 @@ void testremotemsgbus_without_server()
         {
             if(future->get(5, rsp_content) && rsp_content.length() > 0)
             {
-                LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+                LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%" PRIu64 ", data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
             }
             else
             {
-                g_log.Log(lv_debug, "timeout err get net data in thread:%llu while using async get.", (uint64_t)pthread_self());
+                g_log.Log(lv_debug, "timeout err get net data in thread:%" PRIu64 " while using async get.", (uint64_t)pthread_self());
             }
         }
         else
         {
-            g_log.Log(lv_debug, "err send net data in thread:%llu, using async get", (uint64_t)pthread_self());
+            g_log.Log(lv_debug, "err send net data in thread:%" PRIu64 ", using async get", (uint64_t)pthread_self());
             s_break = true;
         }
     }
@@ -555,20 +554,20 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
 {
     //GenerateNextTestParam(param);
     std::string rsp_content;
-    //printf("begin get data:%lld\n", (int64_t)core::utility::GetTickCount());
+    //printf("begin get data:%" PRId64 "\n", (int64_t)core::utility::GetTickCount());
     bool success = NetMsgBusGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
         param, rsp_content, 5);
     if(success && rsp_content.length() > 0)
     {
-        //printf("end get data:%lld\n", (int64_t)core::utility::GetTickCount());
-        LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+        //printf("end get data:%" PRId64 "\n", (int64_t)core::utility::GetTickCount());
+        LOG(g_log, lv_debug, "use netmsgbus get net data success in thread:%" PRIu64 ", data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         //if(mintimeout > 1)
         //  --mintimeout;
         //sleep(3);
     }
     else
     {
-        g_log.Log(lv_debug, "timeout err get net data in thread:%llu", (uint64_t)pthread_self());
+        g_log.Log(lv_debug, "timeout err get net data in thread:%" PRIu64 "", (uint64_t)pthread_self());
         s_break = true;
     }
     sleep(1);
@@ -578,16 +577,16 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
     {
         if(future->get(5, rsp_content) && rsp_content.length() > 0)
         {
-            LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%llu, data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
+            LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%" PRIu64 ", data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         }
         else
         {
-            g_log.Log(lv_debug, "timeout err get net data in thread:%llu while using async get.", (uint64_t)pthread_self());
+            g_log.Log(lv_debug, "timeout err get net data in thread:%" PRIu64 " while using async get.", (uint64_t)pthread_self());
         }
     }
     else
     {
-        g_log.Log(lv_debug, "err send net data in thread:%llu, using async get", (uint64_t)pthread_self());
+        g_log.Log(lv_debug, "err send net data in thread:%" PRIu64 ", using async get", (uint64_t)pthread_self());
         s_break = true;
     }
 
@@ -672,8 +671,6 @@ void testremotemsgbus()
         
         NetMsgBusQueryHostInfo("test.receiverclient_A");
         sleep(3);
-        int mintimeout = 3;
-
         //threadpool::task_type t = boost::bind(testSyncGetData);
         //for(int cocurrent = 0; cocurrent < 100; ++cocurrent)
         //{
@@ -701,7 +698,7 @@ void testremotemsgbus()
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
-        g_log.Log(lv_debug, "%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, starttime,endtime);
+        g_log.Log(lv_debug, "%d msgs used time:%" PRId64 ", (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, starttime,endtime);
         //
     }
 
@@ -736,7 +733,7 @@ void testSyncGetData()
         testremotemsgbus_sync_sub(param);
         if(cnt % 500 == 0)
         {
-            printf("\rget net data success in thread:%llu, cnt:%d.", (uint64_t)pthread_self(), cnt);
+            printf("\rget net data success in thread:%" PRIu64 ", cnt:%d.", (uint64_t)pthread_self(), cnt);
         }
         if(cnt % 100 == 0)
         {
@@ -745,7 +742,7 @@ void testSyncGetData()
         }
     }
     int64_t endtime = utility::GetTickCount();
-    g_log.Log(lv_warn, "get net data in thread:%llu, total cnt:%d. used time:%lld, (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
+    g_log.Log(lv_warn, "get net data in thread:%" PRIu64 ", total cnt:%d. used time:%" PRId64 ", (start,end):(%lld,%lld)\n", (uint64_t)pthread_self(), cnt, endtime - starttime, starttime, endtime);
 }
 
 void testconcurrent_local()
@@ -932,11 +929,11 @@ void testSimpleLogger()
     while(--i > 0)
     {
     time_t t = time(NULL);
-    int64_t tl = (int64_t)t;
-    LOG(g_log, lv_debug, "test lv_debug time_t printf %lld, pid:%d", (int64_t)t, pid);
-    g_log.Log(lv_debug, "test lv_debug time_t printf %lld, pid:%d", (int64_t)t, pid);
-    g_log.Log(lv_info, "test lv_info time_t printf %lld, pid:%d", (int64_t)t, pid);
-    g_log.Log(lv_error, "test lv_error time_t printf %lld, pid:%d", (int64_t)t, pid);
+    //int64_t tl = (int64_t)t;
+    LOG(g_log, lv_debug, "test lv_debug time_t printf %" PRId64 ", pid:%d", (int64_t)t, pid);
+    g_log.Log(lv_debug, "test lv_debug time_t printf %" PRId64 ", pid:%d", (int64_t)t, pid);
+    g_log.Log(lv_info, "test lv_info time_t printf %" PRId64 ", pid:%d", (int64_t)t, pid);
+    g_log.Log(lv_error, "test lv_error time_t printf %" PRId64 ", pid:%d", (int64_t)t, pid);
     usleep(100000);
     }
     sleep(3);
@@ -951,7 +948,7 @@ int main()
     threadpool::init_thread_pool();
     EventLoopPool::InitEventLoopPool();
     InitMsgBus(0);
-    printf("main in thread: %lld.\n",(uint64_t)pthread_self());
+    printf("main in thread: %" PRIu64 ".\n",(uint64_t)pthread_self());
     //testSimpleLogger();
     //sleep(30000);
     //testthreadpool();
