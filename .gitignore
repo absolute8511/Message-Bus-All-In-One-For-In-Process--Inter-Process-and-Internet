@@ -1,4 +1,5 @@
-*.so
+*.so.*
+*.dylib
 *.o
 *.dSYM
 *.DS_Store

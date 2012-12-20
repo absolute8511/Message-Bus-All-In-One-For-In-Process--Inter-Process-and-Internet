@@ -7,7 +7,7 @@ import asyncore, socket
 import time
 import logging
 from NetMsgBusDataDef import *
-from LocalMsgBus import *
+import LocalMsgBus
 from NetMsgBus import *  # for protobuf Type
 
 logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(levelname)8s %(thread)d %(name)s %(message)s")
@@ -98,7 +98,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
     def handle_error(self):
         self.close()
         self.is_closed = True
-        log.error('netmsgbus server connection has error')
+        log.error('!!!!netmsgbus server connection has error!!!!!')
         
     def ReceivePack(self):
         head = MsgBusPackHead()
@@ -140,7 +140,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             dest_port = rsp.dest_host.server_port
             dest_clientname = rsp.dest_name
             log.info('get client info returned. ret name: %s, ip:port : %s:%d', dest_clientname, dest_ip, dest_port)
-            LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', [dest_clientname, (dest_ip, dest_port)])
+            LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', (rsp.ret_code, dest_clientname, (dest_ip, dest_port)))
         else:
             log.info('msgbus server return error while get client info, ret_code: %d.', rsp.ret_code)
 
@@ -172,7 +172,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         pbpack = MsgBusPackPBType()
         pbpack.UnPackBody(bodybuffer)
         log.debug('got pbrsp, pbtype:%s.', pbpack.GetPBType())
-        self.pbdata_handlers.get(pbpack.GetPBType().rstrip('\0'), self.HandlePBUnknown)(pbpack.GetPBData())
+        self.pbdata_handlers.get(pbpack.GetPBType(), self.HandlePBUnknown)(pbpack.GetPBData())
 
     def HandleUnknown(self, bodybuffer):
         log.error('got unknown body from netmsgbus server.')

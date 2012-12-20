@@ -35,6 +35,10 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         log.info('receiver connection to %s:%d closed', self.dest_ip, self.dest_port)
 
     def handle_read(self):
+        if self.need_stop:
+            self.close()
+            self.is_closed = True
+            return
         log.debug('begin read data from receiver')
         self.ReceivePack()
 
@@ -45,6 +49,10 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
+        if self.need_stop:
+            self.close()
+            self.is_closed = True
+            return
         log.debug('begin write data to netmsgbus receiver')
         sent = self.send(self.buffer)
         self.buffer = self.buffer[sent:]
@@ -53,7 +61,7 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         self.req2receivermgr.handle_channel_close()
         self.close()
         self.is_closed = True
-        log.error('netmsgbus receiver connection has error')
+        log.error('!!!! receiver channel connection has error !!!!!')
 
     def ReceivePack(self):
         rsp = ReceiverSendMsgRsp()
@@ -79,10 +87,10 @@ class Future:
         with self.lock:
             self.rsp = rsp
             self.ready = True
+            if callable(self.callback):
+                log.debug('future ready callback')
+                self.callback(self)
             self.cond.notify_all()
-        if callable(self.callback):
-            log.debug('future ready callback')
-            self.callback(self)
 
     def get(self, timeout):
         with self.lock:
@@ -117,7 +125,7 @@ class TcpClientPool:
     def ClearAll(self):
         for ipport,host_channels in self.channels.items():
             for channel in host_channels:
-                channel.close()
+                channel.need_stop = True
         self.channels.clear()
 
 # req2task : (syncflag, retry, futurepair, timeout, (destip, desthost)/destname, data)
@@ -126,6 +134,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
         MsgBusHandlerBase.__init__(self)
         self.server_conn_mgr = server_conn_mgr
         self.wait2send_task = {}
+        self.wait2send_task_lock = threading.Lock()
         self.task_queue = []
         self.task_queue_lock = threading.Lock()
         self.task_queue_cond = threading.Condition(self.task_queue_lock)
@@ -137,7 +146,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
         self.sockmap = {}
         self.tcp_conn_pool = TcpClientPool(self.sockmap, self)
         self.stop = False
-        self.AddHandler("netmsgbus.server.getclient.rsp", self.HandleRspGetClient)
+        self.AddHandler("netmsg.sever.rsp.getclient", self.HandleRspGetClient)
 
     def Stop(self):
         with self.task_queue_lock:
@@ -150,17 +159,17 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
         task = {'sync':True, 'retry':False, 'future':self.GetFuture(), 'timeout':timeout, 'dest':ipport_or_name, 'data':data}
         return self.ProcessReqToReceiver(task)
 
-    def PostMsgDirectToClient(self, ipport_or_name, data):
+    def PostMsgDirectToClient(self, ipport_or_name, data, callback = None):
         if self.stop:
             return None
-        future_pair = self.GetFuture()
+        future_pair = self.GetFuture(callback)
         retry = True
         if isinstance(ipport_or_name, tuple):
             # using (ip, port) no retry getting host info need.
             retry = False
         task = {'sync':False, 'retry':retry, 'future':future_pair, 'timeout':None, 'dest':ipport_or_name, 'data':data}
         self.QueueReqTaskToReceiver(task)
-        log.debug('post task and return :%d ', future_pair[0])
+        log.debug('post task and return futureid:%d ', future_pair[0])
         return future_pair[1]
 
     def ClearData(self):
@@ -169,13 +178,13 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
         self.future_map.clear()
         self.tcp_conn_pool.ClearAll()
 
-    def GetFuture(self):
+    def GetFuture(self, callback = None):
         with self.future_map_lock:
             self.futureid += 1
             if self.futureid == 0:
                 self.futureid += 1
             futureid = self.futureid
-            new_future = Future()
+            new_future = Future(callback)
             self.future_map[futureid] = new_future
         return (futureid, new_future)
 
@@ -210,8 +219,6 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
             else:
                 log.debug('pending task client rsp:%s, but no pending task in client', clientname)
         if ret_code == 0:
-            hostinfo.host_ip = ip;
-            hostinfo.host_port = ntohs(rsp.dest_host.server_port);
             log.debug('get client info returned. ret name : %s, ip:port : %s:%d', clientname, hostinfo[0], 
               hostinfo[1]);
             with self.cache_lock:
@@ -234,6 +241,8 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
 
     def QueueWaitingTask(self, task):
         with self.wait2send_task_lock:
+            if task['dest'] not in self.wait2send_task.keys():
+                self.wait2send_task[task['dest']] = []
             self.wait2send_task[task['dest']].append(task)
             self.server_conn_mgr.ReqReceiverInfo(task['dest'])
 
@@ -253,6 +262,8 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
             destclient = task['dest']
         else:
             destclient = self.GetCachedClient(task['dest'])
+            log.debug('use cached client info : %s,', task['dest'])
+            print destclient
             if destclient is None:
                 if task['retry']:
                     self.QueueWaitingTask(task)

@@ -15,6 +15,12 @@ def test_localmsg_handler(msgid, msgparam):
     print 'handler in test local msgbus: param' + msgparam
     return ('retparam', True)
 
+def test_future_call_back(future):
+    if future.ready:
+        log.info('callback from future, ready for rsp: %s', future.rsp)
+    else:
+        log.info('callback from future, failed to get rsp')
+
 class TestHandler:
     def OnMsg(self, msgid, msgparam):
         print 'handle in OnMsg object'
@@ -57,14 +63,17 @@ serverconn_mgr.QueryAvailableServices('')
 serverconn_bg.join(3)
 
 # test for req2receivermgr
-rsp = req2receivermgr.SendMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam=datafrompython', 3)
+rsp = req2receivermgr.SendMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11111, "testlongdata": "frompythondata"}', 3)
 if rsp[0]:
     print 'sync get data from receiver: ' + rsp[1]
 else:
     print 'sync get data from receiver failed'
 
-future = req2receivermgr.PostMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam=datafrompython')
-print 'async get data from receiver: ' + future.get(3)
+#future = req2receivermgr.PostMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11112, "testlongdata": "frompythondata"}', test_future_call_back)
+#print 'async get data from receiver: ' + future.get(3)
+
+future = req2receivermgr.PostMsgDirectToClient('test.receiverclient_B', 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11113, "testlongdata": "frompythondata"}', test_future_call_back)
+print 'async get data using name : ' + future.get(5)
 
 # wait for test receiver server, wait for data from other client. and test for long no active
 receiver_bg.join(30)

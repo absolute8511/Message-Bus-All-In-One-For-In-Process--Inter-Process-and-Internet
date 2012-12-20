@@ -46,7 +46,7 @@ class ReceiverChannel(asyncore.dispatcher):
 
     def handle_error(self):
         self.close()
-        log.error('client connection has error : %s', self.addr)
+        log.error('!!!!! client connection has error : %s !!!!!!', self.addr)
 
     def ReceivePack(self):
         msg_pack = ReceiverSendMsgReq()
@@ -138,7 +138,7 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
     def handle_error(self):
         self.close()
         self.is_closed = True
-        log.error('receiver server connection has error')
+        log.error('!!!!! receiver server connection has error.!!!!!!')
         
 class ReceiverMgrServerRunner(threading.Thread):
     def __init__(self, receivermgr):

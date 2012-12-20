@@ -99,6 +99,7 @@ class MsgBusRegisterReq(MsgBusPackHeadReq):
 
     def UnPackBody(self, data):
         (self.service_name, ) = struct.unpack_from('!' + MAX_SERVICE_NAME_STR + 's', data, 0)
+        self.service_name = self.service_name.strip('\0')
         self.service_host.unpack(data[MAX_SERVICE_NAME:])
 
     def UnPackData(self, data):
@@ -126,6 +127,7 @@ class MsgBusRegisterRsp(MsgBusPackHeadRsp):
 
     def UnPackBody(self, data):
         (self.ret_code, self.service_name, self.err_msg_len) = struct.unpack_from('!H' + MAX_SERVICE_NAME_STR + 'sH', data, 0)
+        self.service_name = self.service_name.strip('\0')
         used_size = struct.calcsize('!H' + MAX_SERVICE_NAME_STR + 'sH')
         (self.err_msg, ) = struct.unpack_from('!' + str(self.err_msg_len) + 's', data, used_size)
 
@@ -163,6 +165,7 @@ class MsgBusUnRegisterReq(MsgBusPackHeadReq):
 
     def UnPackBody(self, data):
         (self.service_name, ) = struct.unpack_from('!' + MAX_SERVICE_NAME_STR + 's', data, 0)
+        self.service_name = self.service_name.strip('\0')
         self.service_host.unpack(data[MAX_SERVICE_NAME:])
 
     def UnPackData(self, data):
@@ -230,6 +233,7 @@ class MsgBusGetClientReq(MsgBusPackHeadReq):
 
     def UnPackBody(self, data):
         (self.dest_name, ) = struct.unpack_from('!' + MAX_SERVICE_NAME_STR + 's', data, 0)
+        self.dest_name = self.dest_name.strip('\0')
 
     def UnPackData(self, data):
         self.UnPackReqHead(data)
@@ -254,6 +258,7 @@ class MsgBusGetClientRsp(MsgBusPackHeadRsp):
 
     def UnPackBody(self, data):
         (self.ret_code, self.dest_name) = struct.unpack_from('!H' + MAX_SERVICE_NAME_STR + 's', data, 0)
+        self.dest_name = self.dest_name.strip('\0')
         used_size = struct.calcsize('!H' + MAX_SERVICE_NAME_STR + 's')
         self.dest_host.unpack(data[used_size:])
 
@@ -284,6 +289,8 @@ class MsgBusSendMsgReq(MsgBusPackHeadReq):
     def UnPackBody(self, data):
         (self.dest_name, self.from_name, self.msg_id, self.msg_len) = struct.unpack_from(
                 '!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sII', data, 0)
+        self.dest_name = self.dest_name.strip('\0')
+        self.from_name = self.from_name.strip('\0')
         used_size = struct.calcsize('!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sII')
         (self.msg_content, ) = struct.unpack_from( '!' + str(self.msg_len) + 's', data, used_size)
 
@@ -377,6 +384,7 @@ class MsgBusPackPBType(MsgBusPackHead):
         (self.pbtype_len, self.pbdata_len) = struct.unpack_from('!ii', data, 0)
         used_size = struct.calcsize('!ii')
         (self.pbtype, self.pbdata) = struct.unpack_from('!' + str(self.pbtype_len) + 's' + str(self.pbdata_len) + 's', data, used_size)
+        self.pbtype = self.pbtype.rstrip('\0')
 
     def UnPackData(self, data):
         self.UnPackHead(data)
