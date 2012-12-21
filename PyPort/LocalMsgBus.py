@@ -87,10 +87,10 @@ class MsgBus:
         for h in handlers:
             copyed_param = copy.copy(original_param)
             if h[1]:
-                log.debug('====== object with OnMsg handler ===== ')
+                #log.debug('====== object with OnMsg handler ===== ')
                 (msgparam, is_continue) = h[0].OnMsg(msgid, copyed_param)
             else:
-                log.debug('====== function handler ===== ')
+                #log.debug('====== function handler ===== ')
                 (msgparam, is_continue) = h[0](msgid, copyed_param)
             if not is_continue:
                 return msgparam
@@ -98,7 +98,7 @@ class MsgBus:
 
     def SendMsg(self, msgid, msgparam):
         strong_handlers = []
-        log.debug('begin handle msgid: %s', msgid)
+        #log.debug('begin handle msgid: %s', msgid)
         with self.lock:
             if msgid not in self.all_handlers.keys():
                 log.debug('msgid: %s no handlers found.', msgid)

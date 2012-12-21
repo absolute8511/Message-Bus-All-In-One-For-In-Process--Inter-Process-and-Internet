@@ -37,6 +37,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.server_ip = server_ip
         self.server_port = server_port
         self.buffer = ''
+        self.read_buffer = ''
         self.last_active = time.time()
         self.need_stop = False
         self.is_closed = False
@@ -54,7 +55,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             self.is_closed = True
             return
         if(time.time() - self.last_active > 45):
-            log.debug('sending keep alive heart ...')
+            log.info('sending keep alive heart ...')
             self.ConfirmAlive()
             self.last_active = time.time()
 
@@ -79,7 +80,6 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def handle_read(self):
         self.last_active = time.time()
-        log.debug('begin read data from netmsgbus server')
         self.ReceivePack()
 
     def readable(self):
@@ -89,7 +89,6 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
-        log.debug('begin write data to netmsgbus server')
         with self.writelocker:
             sent = self.send(self.buffer)
             self.buffer = self.buffer[sent:]
@@ -101,15 +100,32 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         log.error('!!!!netmsgbus server connection has error!!!!!')
         
     def ReceivePack(self):
-        head = MsgBusPackHead()
-        log.debug('reading pack head : %d ', head.HeadSize())
-        headbuffer = self.recv(head.HeadSize())
-        if not head.UnPackHead(headbuffer):
-            log.error('unpack head error.')
-            return
-        bodybuffer = self.recv(head.body_len)
-        log.debug('received pack type : %d, len:%d ', head.body_type, head.body_len)
-        self.rsp_handlers.get(head.body_type, self.HandleUnknown)(bodybuffer)
+        need_recv = True
+        while True:
+            if need_recv:
+                try:
+                    tmpbuf = self.recv(4098)
+                except socket.error, why:
+                    log.debug('==== receiver data exception: %s', why)
+                    need_recv = False
+                    if len(self.read_buffer) == 0:
+                        return
+                self.read_buffer += tmpbuf
+                tmpbuf = ''
+            head = MsgBusPackHead()
+            if len(self.read_buffer) < head.HeadSize():
+                return
+            headbuffer = self.read_buffer[:head.HeadSize()]
+            if not head.UnPackHead(headbuffer):
+                log.error('unpack head error.')
+                self.read_buffer = ''
+                return
+            if len(self.read_buffer) < head.HeadSize() + head.body_len:
+                return
+            bodybuffer = self.read_buffer[head.HeadSize():head.body_len + head.HeadSize()]
+            self.read_buffer = self.read_buffer[head.body_len + head.HeadSize():]
+            log.debug('received pack type : %d, len:%d ', head.body_type, head.body_len)
+            self.rsp_handlers.get(head.body_type, self.HandleUnknown)(bodybuffer)
 
     def HandleRspConfirmAlive(self, bodybuffer):
         rsp = MsgBusConfirmAliveRsp()

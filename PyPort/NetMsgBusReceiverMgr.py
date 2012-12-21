@@ -17,6 +17,7 @@ class ReceiverChannel(asyncore.dispatcher):
         self.addr = addr
         self.last_active = time.time()
         self.buffer = ''
+        self.read_buffer = ''
 
     def handle_close(self):
         self.close()
@@ -39,7 +40,7 @@ class ReceiverChannel(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
-        log.debug('begin write data to receiver client: %s', self.addr)
+        #log.debug('begin write data to receiver client: %s', self.addr)
         sent = self.send(self.buffer)
         self.buffer = self.buffer[sent:]
         self.last_active = time.time()
@@ -49,16 +50,33 @@ class ReceiverChannel(asyncore.dispatcher):
         log.error('!!!!! client connection has error : %s !!!!!!', self.addr)
 
     def ReceivePack(self):
-        msg_pack = ReceiverSendMsgReq()
-        headdata = self.recv(msg_pack.HeadSize())
-        msg_pack.UnPackHead(headdata)
-        msgcontent = self.recv(msg_pack.data_len)
-        msg_pack.UnPackBody(msgcontent)
-        # 消息格式必须是 msgid=消息标示串＆msgparam=具体的消息内容 
-        # 具体的消息内容可以是JSON/XML数据格式(或者也可以是二进制数据)，具体由收发双方协定
-        if msg_pack.sync_sid > 0:
-            log.debug("got a receiver client request, syncflag:%d, sid:%d, client:%s", msg_pack.is_sync, msg_pack.sync_sid, self.addr)
-            self.NetMsgBusRspSendMsg(msg_pack)
+        need_recv = True
+        while True:
+            if need_recv:
+                try:
+                    tmpbuf = self.recv(4098)
+                except socket.error, why:
+                    log.debug('==== receiver data exception: %s', why)
+                    need_recv = False
+                    if len(self.read_buffer) == 0:
+                        return
+                self.read_buffer += tmpbuf
+                tmpbuf = ''
+            msg_pack = ReceiverSendMsgReq()
+            if len(self.read_buffer) < msg_pack.HeadSize():
+                return
+            headdata = self.read_buffer[:msg_pack.HeadSize()]
+            msg_pack.UnPackHead(headdata)
+            if len(self.read_buffer) < msg_pack.HeadSize() + msg_pack.data_len:
+                return
+            msgcontent = self.read_buffer[msg_pack.HeadSize():msg_pack.data_len + msg_pack.HeadSize()]
+            self.read_buffer = self.read_buffer[msg_pack.data_len + msg_pack.HeadSize():]
+            msg_pack.UnPackBody(msgcontent)
+            # 消息格式必须是 msgid=消息标示串＆msgparam=具体的消息内容 
+            # 具体的消息内容可以是JSON/XML数据格式(或者也可以是二进制数据)，具体由收发双方协定
+            if msg_pack.sync_sid > 0:
+                log.debug("got a receiver client request, syncflag:%d, sid:%d, client:%s", msg_pack.is_sync, msg_pack.sync_sid, self.addr)
+                self.NetMsgBusRspSendMsg(msg_pack)
 
     def NetMsgBusRspSendMsg(self, msg_pack):
         msgid = ReceiverMsgUtil.GetMsgId(msg_pack.data)
@@ -110,7 +128,6 @@ class NetMsgBusReceiverMgr(asyncore.dispatcher):
         if self.need_stop:
             self.close()
             self.is_closed = True
-            log.debug('close all clients from loop')
             for c in self.sockmap.values():
                 c.close()
 

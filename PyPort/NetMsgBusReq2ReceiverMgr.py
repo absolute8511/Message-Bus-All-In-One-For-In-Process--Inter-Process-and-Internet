@@ -18,6 +18,7 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         self.dest_ip = destip
         self.dest_port = destport
         self.buffer = ''
+        self.read_buffer = ''
         self.need_stop = False
         self.is_closed = False
         self.req2receivermgr = req2receivermgr
@@ -26,7 +27,7 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         self.connect( (destip, destport) )
 
     def handle_connect(self):
-        log.debug('connect to receiver success')
+        pass
 
     def handle_close(self):
         self.req2receivermgr.handle_channel_close()
@@ -39,7 +40,6 @@ class Req2ReceiverChannel(asyncore.dispatcher):
             self.close()
             self.is_closed = True
             return
-        log.debug('begin read data from receiver')
         self.ReceivePack()
 
     def readable(self):
@@ -53,7 +53,6 @@ class Req2ReceiverChannel(asyncore.dispatcher):
             self.close()
             self.is_closed = True
             return
-        log.debug('begin write data to netmsgbus receiver')
         sent = self.send(self.buffer)
         self.buffer = self.buffer[sent:]
 
@@ -64,12 +63,29 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         log.error('!!!! receiver channel connection has error !!!!!')
 
     def ReceivePack(self):
-        rsp = ReceiverSendMsgRsp()
-        headbuffer = self.recv(rsp.HeadSize())
-        rsp.UnPackHead(headbuffer)
-        rsp.data = self.recv(rsp.data_len)
-        log.debug('reading receiver rsp : future_id :%d, data:%s ', rsp.sync_sid, rsp.data)
-        self.req2receivermgr.handle_channel_rsp(rsp.sync_sid, rsp.data)
+        need_recv = True
+        while True:
+            if need_recv:
+                try:
+                    tmpbuf = self.recv(4098)
+                except socket.error, why:
+                    log.debug('==== receiver data exception: %s', why)
+                    need_recv = False
+                    if len(self.read_buffer) == 0:
+                        return
+                self.read_buffer += tmpbuf
+                tmpbuf = ''
+            rsp = ReceiverSendMsgRsp()
+            if len(self.read_buffer) < rsp.HeadSize():
+                return
+            headbuffer = self.read_buffer[:rsp.HeadSize()]
+            rsp.UnPackHead(headbuffer)
+            if len(self.read_buffer) < rsp.HeadSize() + rsp.data_len:
+                return
+            rsp.data = self.read_buffer[rsp.HeadSize():rsp.data_len + rsp.HeadSize()]
+            self.read_buffer = self.read_buffer[rsp.data_len + rsp.HeadSize():]
+            log.debug('reading receiver rsp : future_id :%d, data:%s ', rsp.sync_sid, rsp.data)
+            self.req2receivermgr.handle_channel_rsp(rsp.sync_sid, rsp.data)
 
 class Future:
     def __init__(self, callback = None):
@@ -88,7 +104,7 @@ class Future:
             self.rsp = rsp
             self.ready = True
             if callable(self.callback):
-                log.debug('future ready callback')
+                #log.debug('future ready callback')
                 self.callback(self)
             self.cond.notify_all()
 
@@ -169,7 +185,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
             retry = False
         task = {'sync':False, 'retry':retry, 'future':future_pair, 'timeout':None, 'dest':ipport_or_name, 'data':data}
         self.QueueReqTaskToReceiver(task)
-        log.debug('post task and return futureid:%d ', future_pair[0])
+        #log.debug('post task and return futureid:%d ', future_pair[0])
         return future_pair[1]
 
     def ClearData(self):
@@ -291,7 +307,6 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
     def IdentiySelfToReceiver(self, newtcp):
         sendername = self.server_conn_mgr.receiver_name
         identify_data = ReceiverMsgUtil.MakeMsgNetData('', '', sendername)
-        log.debug('identify data is :%s', identify_data)
         identifytask = {'sync':False, 'retry':False, 'future':(0, None), 'dest':sendername,
                 'timeout':None, 'data': identify_data}
         return self.WriteTaskDataToReceiver(newtcp, identifytask)
@@ -307,7 +322,6 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
 
         req.SetMsgData(task['data'])
         newtcp.buffer += req.PackData() 
-        log.debug('send data to receiver %s', newtcp.buffer)
         # 如果要求同步发送， 则等待
         result = None
         if (task['sync']):
