@@ -217,8 +217,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         reg_req = MsgBusRegisterReq() 
         reg_req.service_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         reg_req.service_host = host
-        log.debug('Register pack len: %d', len(reg_req.PackData()))
-        print "".join('%#04x' % ord(c) for c in reg_req.PackData())
+        #log.debug('Register pack len: %d', len(reg_req.PackData()))
+        #print "".join('%#04x' % ord(c) for c in reg_req.PackData())
         with self.writelocker:
             self.buffer += reg_req.PackData() 
         return True

@@ -113,6 +113,7 @@ void MsgBusRegisterReq::PackBody(char *data, size_t len)
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
+    service_host.busy_state = (kServerBusyState)htonl(service_host.busy_state);
     *((ClientHost *)p) = service_host;
 }
 void MsgBusRegisterReq::PackData(char *data, size_t len)
@@ -134,6 +135,7 @@ int MsgBusRegisterReq::UnPackBody(const char *data, size_t len)
     strncpy(service_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     service_host = *((ClientHost*)p);
+    service_host.busy_state = (kServerBusyState)ntohl(service_host.busy_state);
     return 0;
     }
     catch(...)
@@ -258,6 +260,7 @@ void MsgBusUnRegisterReq::PackBody(char *data, size_t len)
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
+    service_host.busy_state = (kServerBusyState)htonl(service_host.busy_state);
     *((ClientHost *)p) = service_host;
 }
 void MsgBusUnRegisterReq::PackData(char *data, size_t len)
@@ -279,6 +282,7 @@ int MsgBusUnRegisterReq::UnPackBody(const char *data, size_t len)
     strncpy(service_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     service_host = *((ClientHost*)p);
+    service_host.busy_state = (kServerBusyState)ntohl(service_host.busy_state);
     return 0;
     }
     catch(...)
@@ -484,6 +488,7 @@ void MsgBusGetClientRsp::PackBody(char *data, size_t len)
     p += sizeof(ret_code);
     strncpy(p, dest_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
+    dest_host.busy_state = (kServerBusyState)htonl(dest_host.busy_state);
     *((ClientHost *)p) = dest_host;
 }
 void MsgBusGetClientRsp::PackData(char *data, size_t len)
@@ -507,6 +512,7 @@ int MsgBusGetClientRsp::UnPackBody(const char *data, size_t len)
     strncpy(dest_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     dest_host = *((ClientHost *)p);
+    dest_host.busy_state = (kServerBusyState)ntohl(dest_host.busy_state);
     return 0;
     }
     catch(...)
