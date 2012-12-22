@@ -50,18 +50,16 @@ class ReceiverChannel(asyncore.dispatcher):
         log.error('!!!!! client connection has error : %s !!!!!!', self.addr)
 
     def ReceivePack(self):
-        need_recv = True
+        try:
+            tmpbuf = self.recv(4098)
+        except socket.error, why:
+            log.debug('==== receiver data exception: %s', why)
+            if len(self.read_buffer) == 0:
+                return
+        self.read_buffer += tmpbuf
+        tmpbuf = ''
+
         while True:
-            if need_recv:
-                try:
-                    tmpbuf = self.recv(4098)
-                except socket.error, why:
-                    log.debug('==== receiver data exception: %s', why)
-                    need_recv = False
-                    if len(self.read_buffer) == 0:
-                        return
-                self.read_buffer += tmpbuf
-                tmpbuf = ''
             msg_pack = ReceiverSendMsgReq()
             if len(self.read_buffer) < msg_pack.HeadSize():
                 return

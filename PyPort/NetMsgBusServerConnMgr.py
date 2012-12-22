@@ -100,18 +100,16 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         log.error('!!!!netmsgbus server connection has error!!!!!')
         
     def ReceivePack(self):
-        need_recv = True
+        try:
+            tmpbuf = self.recv(4098)
+        except socket.error, why:
+            log.debug('==== receiver data exception: %s', why)
+            if len(self.read_buffer) == 0:
+                return
+        self.read_buffer += tmpbuf
+        tmpbuf = ''
+
         while True:
-            if need_recv:
-                try:
-                    tmpbuf = self.recv(4098)
-                except socket.error, why:
-                    log.debug('==== receiver data exception: %s', why)
-                    need_recv = False
-                    if len(self.read_buffer) == 0:
-                        return
-                self.read_buffer += tmpbuf
-                tmpbuf = ''
             head = MsgBusPackHead()
             if len(self.read_buffer) < head.HeadSize():
                 return
@@ -219,11 +217,16 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         reg_req = MsgBusRegisterReq() 
         reg_req.service_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         reg_req.service_host = host
-        #log.debug('Register pack len: %d', len(outbuffer))
-        #print "".join('%#04x' % ord(c) for c in outbuffer)
+        log.debug('Register pack len: %d', len(reg_req.PackData()))
+        print "".join('%#04x' % ord(c) for c in reg_req.PackData())
         with self.writelocker:
             self.buffer += reg_req.PackData() 
         return True
+
+    def UpdateReceiverState(self, busy_state):
+        if self.receiver_port == 0 or self.receiver_name == '':
+            return
+        self.RegisterNetMsgBusReceiver(self.receiver_ip, self.receiver_port, self.receiver_name, busy_state)
 
     def UnRegisterNetMsgBusReceiver(self):
         if not self.connected:

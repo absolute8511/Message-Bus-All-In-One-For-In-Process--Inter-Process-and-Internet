@@ -5,85 +5,93 @@ import logging
 from NetMsgBusServerConnMgr import *
 from NetMsgBusReceiverMgr import *
 from NetMsgBusReq2ReceiverMgr import *
-from LocalMsgBus import *
-#from NetMsgBusInterface import *
+import LocalMsgBus
 
 logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(levelname)8s %(thread)d %(name)s %(message)s")
 log = logging.getLogger(__name__)
 
-def test_localmsg_handler(msgid, msgparam):
-    print 'handler in test local msgbus: param' + msgparam
-    return ('retparam', True)
+class kMsgSendType:
+    SendDirectToClient = 1
+    SendUseServerRelay = 2
 
-def test_future_call_back(future):
-    if future.ready:
-        log.info('callback from future, ready for rsp: %s', future.rsp)
-    else:
-        log.info('callback from future, failed to get rsp')
+class NetMsgBus:
+    server_conn_map = {}
+    receiver_conn_map = {}
+    serverconn_mgr = None
+    req2receiver_mgr = None
+    receiver_mgr = None
+    serverconn_bg = None
+    receiver_bg = None
+    req2receiver_bg = None
 
-class TestHandler:
-    def OnMsg(self, msgid, msgparam):
-        print 'handle in OnMsg object'
-        return test_localmsg_handler(msgid, msgparam)
     @staticmethod
-    def StaticOnMsg(msgid, msgparam):
-        print 'handler in TestHandler static onmsg'
-        return test_localmsg_handler(msgid, msgparam)
+    def Init(serverip, serverport, receiverip, receiverport, local_clientname):
+        NetMsgBus.serverconn_mgr = NetMsgBusServerConnMgr(serverip, serverport, receiverip, receiverport, local_clientname, NetMsgBus.server_conn_map)
+        NetMsgBus.serverconn_bg = ServerConnectionRunner(NetMsgBus.serverconn_mgr)
+        NetMsgBus.serverconn_bg.daemon = True
 
+        if receiverport > 0:
+            NetMsgBus.receiver_mgr = NetMsgBusReceiverMgr(receiverip, receiverport, NetMsgBus.receiver_conn_map)
+            NetMsgBus.receiver_bg = ReceiverMgrServerRunner(NetMsgBus.receiver_mgr)
+            NetMsgBus.receiver_bg.daemon = True
+        NetMsgBus.req2receiver_mgr = NetMsgBusReq2ReceiverMgr(NetMsgBus.serverconn_mgr)
+        NetMsgBus.req2receiver_bg = Req2ReceiverMgrRunner(NetMsgBus.req2receiver_mgr)
+        NetMsgBus.req2receiver_bg.daemon = True
 
-test_handler = TestHandler()
-LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_localmsg_handler)
-LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_handler)
-LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_handler.OnMsg)
-LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', TestHandler.StaticOnMsg)
+        NetMsgBus.serverconn_bg.start()
+        if receiverport > 0:
+            NetMsgBus.receiver_bg.start()
+        NetMsgBus.req2receiver_bg.start()
 
-server_conn_map = {}
-receiver_conn_map = {}
-serverconn_mgr = NetMsgBusServerConnMgr('127.0.0.1', 19000, '', 9100, 'test.receiverclient_A', server_conn_map)
-receivermgr = NetMsgBusReceiverMgr('', 9100, receiver_conn_map)
-req2receivermgr = NetMsgBusReq2ReceiverMgr(serverconn_mgr)
+    @staticmethod
+    def DisConnectFromServer():
+        NetMsgBus.serverconn_mgr.disconnect()
 
-serverconn_bg = ServerConnectionRunner(serverconn_mgr)
-receiver_bg = ReceiverMgrServerRunner(receivermgr)
-req2receiver_bg = Req2ReceiverMgrRunner(req2receivermgr)
+    @staticmethod
+    def Destroy():
+        NetMsgBus.serverconn_mgr.UnRegisterNetMsgBusReceiver()
+        NetMsgBus.receiver_mgr.StopReceiver()
+        NetMsgBus.serverconn_mgr.disconnect()
+        NetMsgBus.req2receiver_bg.stop()
+        log.debug('waiting to quit netmsgbus ...')
+        NetMsgBus.serverconn_bg.join()
+        NetMsgBus.receiver_bg.join()
+        NetMsgBus.req2receiver_bg.join()
 
-serverconn_bg.daemon = True
-receiver_bg.daemon = True
-req2receiver_bg.daemon = True
-serverconn_bg.start()
-receiver_bg.start()
-req2receiver_bg.start()
-serverconn_bg.join(2)
-# test for server connection
-serverconn_mgr.ReqReceiverInfo('test.receiverclient_B')
-serverconn_bg.join(1)
-serverconn_mgr.PostNetMsgUseServerRelay('test.receiverclient_B', 'msgid=test.postmsg&msgparam=123')
-serverconn_bg.join(1)
-serverconn_mgr.QueryAvailableServices('')
-serverconn_bg.join(3)
+    @staticmethod
+    def Wait(timeout):
+        NetMsgBus.req2receiver_bg.join(timeout)
 
-# test for req2receivermgr
-rsp = req2receivermgr.SendMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11111, "testlongdata": "frompythondata"}', 3)
-if rsp[0]:
-    print 'sync get data from receiver: ' + rsp[1]
-else:
-    print 'sync get data from receiver failed'
+    @staticmethod
+    def UpdateReceiverState(busy_state):
+        NetMsgBus.serverconn_mgr.UpdateReceiverState(busy_state)
 
-#future = req2receivermgr.PostMsgDirectToClient(('127.0.0.1', 9101), 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11112, "testlongdata": "frompythondata"}', test_future_call_back)
-#print 'async get data from receiver: ' + future.get(3)
+    @staticmethod
+    def NetQueryHostInfo(dest_name):
+        NetMsgBus.serverconn_mgr.ReqReceiverInfo(dest_name)
 
-future = req2receivermgr.PostMsgDirectToClient('test.receiverclient_B', 'msgid=msg_netmsgbus_testmsg1&msgparam={"testkey":11113, "testlongdata": "frompythondata"}', test_future_call_back)
-print 'async get data using name : ' + future.get(5)
+    @staticmethod
+    def NetQueryAvailableServices(match_msgstr):
+        NetMsgBus.serverconn_mgr.QueryAvailableServices(match_msgstr)
 
-# wait for test receiver server, wait for data from other client. and test for long no active
-receiver_bg.join(30)
-req2receiver_bg.stop()
-log.debug('unregister ...')
-serverconn_mgr.UnRegisterNetMsgBusReceiver()
-receivermgr.StopReceiver()
-serverconn_bg.join(3)
-serverconn_mgr.disconnect()
-log.debug('waiting to quit ...')
-serverconn_bg.join()
-receiver_bg.join()
+    @staticmethod
+    def NetSendMsg(destname_or_ipport, msgid, msgdata, sendtype):
+        netmsg_data = ReceiverMsgUtil.MakeMsgNetData(msgid, msgdata)
+        if sendtype == kMsgSendType.SendUseServerRelay:
+            NetMsgBus.serverconn_mgr.PostNetMsgUseServerRelay(destname_or_ipport, netmsg_data)
+        elif sendtype == kMsgSendType.SendDirectToClient:
+            NetMsgBus.req2receiver_mgr.PostMsgDirectToClient(destname_or_ipport, netmsg_data)
+        else:
+            log.warn('not supported sendtype : %d in NetSendMsg.', sendtype)
+
+    @staticmethod
+    def NetAsyncGetData(destname_or_ipport, msgid, msgdata, callback):
+        netmsg_data = ReceiverMsgUtil.MakeMsgNetData(msgid, msgdata)
+        return NetMsgBus.req2receiver_mgr.PostMsgDirectToClient(destname_or_ipport, netmsg_data, callback)
+
+    # return (True, rsp), True for success, False for timeout or error.
+    @staticmethod
+    def NetSyncGetData(destname_or_ipport, msgid, msgdata, timeout_sec = 30):
+        netmsg_data = ReceiverMsgUtil.MakeMsgNetData(msgid, msgdata)
+        return NetMsgBus.req2receiver_mgr.SendMsgDirectToClient(destname_or_ipport, netmsg_data, timeout_sec)
 

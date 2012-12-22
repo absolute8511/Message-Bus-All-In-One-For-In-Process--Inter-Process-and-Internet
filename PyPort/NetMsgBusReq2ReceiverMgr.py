@@ -63,18 +63,16 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         log.error('!!!! receiver channel connection has error !!!!!')
 
     def ReceivePack(self):
-        need_recv = True
+        try:
+            tmpbuf = self.recv(4098)
+        except socket.error, why:
+            log.debug('==== receiver data exception: %s', why)
+            if len(self.read_buffer) == 0:
+                return
+        self.read_buffer += tmpbuf
+        tmpbuf = ''
+
         while True:
-            if need_recv:
-                try:
-                    tmpbuf = self.recv(4098)
-                except socket.error, why:
-                    log.debug('==== receiver data exception: %s', why)
-                    need_recv = False
-                    if len(self.read_buffer) == 0:
-                        return
-                self.read_buffer += tmpbuf
-                tmpbuf = ''
             rsp = ReceiverSendMsgRsp()
             if len(self.read_buffer) < rsp.HeadSize():
                 return

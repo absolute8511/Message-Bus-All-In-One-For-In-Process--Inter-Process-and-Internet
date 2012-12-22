@@ -28,10 +28,10 @@ class kMsgBusBodyType:
     UNKNOWN_BODY                         = 0xFFFFFF
 
 class ClientHost:
-    def __init__(self, ip = '', port = 0):
+    def __init__(self, ip = '', port = 0, busy_state = 0):
         self.server_ip = ip   # ip is binary string with network order, can be get using inet_aton
         self.server_port = port
-        self.busy_state = 0
+        self.busy_state = busy_state
     def pack(self):
         return self.server_ip.ljust(4, '\0') + struct.pack('!Hi', self.server_port, self.busy_state)
     def unpack(self, data):

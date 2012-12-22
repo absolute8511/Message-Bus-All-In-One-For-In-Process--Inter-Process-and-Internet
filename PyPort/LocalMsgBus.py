@@ -113,30 +113,48 @@ class MsgBus:
 
         return self.DoMsgHandler(msgid, msgparam, strong_handlers)
 
-g_msgbus = MsgBus()
+g_msgbus = None
+
+def InitMsgBus():
+    global g_msgbus
+    g_msgbus = MsgBus()
+
+def DestroyMsgBus():
+    global g_msgbus
+    g_msgbus.all_handlers.clear()
+    g_msgbus = None
+    log.debug('local msgbus destroyed.')
 
 def SendMsg(msgid, msgparam):
+    global g_msgbus
     return g_msgbus.SendMsg(msgid, msgparam)
 
 def AddHandler(msgid, handler):
+    global g_msgbus
     return g_msgbus.AddHandler(msgid, handler)
 
 def RemoveHandler(msgid, handler):
+    global g_msgbus
     return g_msgbus.RemoveHandler(msgid, handler)
 
 class MsgBusHandlerBase:
     def __init__(self):
         self.all_dispatchers = {}
+        self.dispatcher_lock = threading.Lock()
 
     def AddHandler(self, msgid, dispatcher):
         if not callable(dispatcher):
             log.debug('dispatcher in handler object is not callable')
             return False
-        self.all_dispatchers[msgid] = dispatcher
+        with self.dispatcher_lock:
+            self.all_dispatchers[msgid] = dispatcher
         return AddHandler(msgid, self)
 
     def OnMsg(self, msgid, msgparam):
-        if msgid not in self.all_dispatchers.keys():
-            log.debug('msgid :%s not found in dispatchers', msgid)
-            return
-        return self.all_dispatchers[msgid](msgid, msgparam)
+        call_func = None
+        with self.dispatcher_lock:
+            if msgid not in self.all_dispatchers.keys():
+                log.debug('msgid :%s not found in dispatchers', msgid)
+                return
+            call_func = self.all_dispatchers[msgid]
+        return call_func(msgid, msgparam)
