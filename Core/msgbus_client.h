@@ -1,6 +1,7 @@
 #ifndef MSGBUS_CLIENT_H
 #define MSGBUS_CLIENT_H
 #include "msgbus_def.h"
+#include "NetMsgBusFuture.hpp"
 #include <boost/shared_array.hpp>
 #include <string>
 
@@ -19,9 +20,10 @@ bool msgbus_postmsg_use_server_relay(const std::string& clientname, uint32_t dat
 // post message to all registed client in the netmsgbus.
 bool msgbus_postmsg_broadcast(uint32_t data_len, boost::shared_array<char> data);
 // 直接向客户端发送消息，客户端名称使用精确匹配方式
-boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data);
+boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len,
+    boost::shared_array<char> data, NetFuture::futureCB callback = NULL);
 boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& dest_ip, unsigned short dest_port,
-    uint32_t data_len, boost::shared_array<char> data);
+    uint32_t data_len, boost::shared_array<char> data, NetFuture::futureCB callback = NULL);
 // 同步发送消息，由于是同步的，因此此函数不会像服务器请求新的客户端信息，而是使用缓存中的数据
 // 如果缓存数据不存在或者已失效，那么该函数返回失败。
 // 为了提高发送成功率，应该先使用异步方式从服务器获取该客户端信息，成功后再调用该函数

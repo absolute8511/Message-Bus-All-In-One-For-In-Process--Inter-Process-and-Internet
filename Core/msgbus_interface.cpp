@@ -645,20 +645,21 @@ bool NetMsgBusQueryHostInfo(const std::string& clientname)
     return msgbus_req_receiver_info(clientname);
 }
 
-boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param)
+boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid,
+    MsgBusParam param, NetFuture::futureCB callback)
 {
     MsgBusParam netmsg_param;
     GenerateNetMsgContent(msgid, param, clientname, netmsg_param);
     uint32_t netmsg_len = netmsg_param.paramlen;
-    return msgbus_postmsg_direct_to_client(clientname, netmsg_len, netmsg_param.paramdata);
+    return msgbus_postmsg_direct_to_client(clientname, netmsg_len, netmsg_param.paramdata, callback);
 }
-boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& dest_ip,
-   unsigned short dest_port, const std::string& msgid, MsgBusParam param)
+boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& dest_ip, unsigned short dest_port,
+    const std::string& msgid, MsgBusParam param, NetFuture::futureCB callback)
 {
     MsgBusParam netmsg_param;
     GenerateNetMsgContent(msgid, param, "", netmsg_param);
     uint32_t netmsg_len = netmsg_param.paramlen;
-    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata);
+    return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata, callback);
 }
 
 bool NetMsgBusGetData(const std::string& clientname, const std::string& msgid, MsgBusParam param, 

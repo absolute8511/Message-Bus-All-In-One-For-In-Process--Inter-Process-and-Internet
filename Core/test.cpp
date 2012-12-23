@@ -277,6 +277,13 @@ void func4(const string& str)
     printf("task4 %s\n",str.c_str());
 }
 
+void test_cb_forfuture(const NetFuture& future)
+{
+    std::string rsp;
+    assert(future.get(rsp));
+    printf("=== in future callback, future is ready: %s\n", rsp.c_str());
+}
+
 void waitforbreak()
 {
     printf("wait for break...\n");
@@ -523,7 +530,7 @@ void testremotemsgbus_without_server()
         }
         sleep(1);
         boost::shared_ptr<NetFuture> future = NetMsgBusAsyncGetData("127.0.0.1", 9100, "msg_netmsgbus_testgetdata",
-            param);
+            param, boost::bind(test_cb_forfuture, _1));
         if(future)
         {
             if(future->get(5, rsp_content) && rsp_content.length() > 0)
@@ -572,7 +579,7 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
     }
     sleep(1);
     boost::shared_ptr<NetFuture> future = NetMsgBusAsyncGetData("test.receiverclient_A", "msg_netmsgbus_testgetdata",
-        param);
+        param, boost::bind(test_cb_forfuture, _1));
     if(future)
     {
         if(future->get(5, rsp_content) && rsp_content.length() > 0)

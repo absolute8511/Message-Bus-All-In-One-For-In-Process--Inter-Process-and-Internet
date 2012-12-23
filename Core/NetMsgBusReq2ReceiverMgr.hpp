@@ -158,7 +158,7 @@ public:
     }
 
     boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& dest_ip, unsigned short dest_port,
-        uint32_t data_len, boost::shared_array<char> data)
+        uint32_t data_len, boost::shared_array<char> data, NetFuture::futureCB callback = NULL)
     {
         boost::shared_ptr<NetFuture> ret_future;
         if( !m_req2receiver_running )
@@ -176,14 +176,15 @@ public:
         rtask.retry = false;
         rtask.dest_client.host_ip = dest_ip;
         rtask.dest_client.host_port = dest_port;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future(callback);
         rtask.future_id = future.first;
         if(!QueueReqTaskToReceiver(rtask))
             return boost::shared_ptr<NetFuture>();
         return future.second;
     }
 
-    boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
+    boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data,
+        NetFuture::futureCB callback = NULL)
     {
         if( !m_req2receiver_running )
         {
@@ -195,7 +196,7 @@ public:
         rtask.data = data;
         rtask.data_len = data_len;
         rtask.retry = true;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future(callback);
         rtask.future_id = future.first;
         if(!QueueReqTaskToReceiver(rtask))
             return boost::shared_ptr<NetFuture>();
@@ -617,7 +618,7 @@ private:
         m_cached_client_info.erase(clientname);
     }
 
-    std::pair<uint32_t, boost::shared_ptr<NetFuture> > safe_insert_future()
+    std::pair<uint32_t, boost::shared_ptr<NetFuture> > safe_insert_future(NetFuture::futureCB callback = NULL)
     {
         core::common::locker_guard guard(m_rsp_sendmsg_lock);
         ++future_sessionid_;
@@ -625,7 +626,7 @@ private:
             ++future_sessionid_;
         uint32_t waiting_futureid = future_sessionid_;
         std::pair<FutureRspContainerT::iterator, bool> inserted = m_sendmsg_rsp_container.insert(
-            std::make_pair(waiting_futureid, boost::shared_ptr<NetFuture>(new NetFuture)));
+            std::make_pair(waiting_futureid, boost::shared_ptr<NetFuture>(new NetFuture(callback))));
         assert(inserted.second);
         return std::make_pair(waiting_futureid, inserted.first->second);
     }

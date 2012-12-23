@@ -8,9 +8,9 @@
 #include <sys/time.h>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
+#include <boost/function.hpp>
 
 using std::string;
-using namespace core::net;
 
 namespace NetMsgBus
 {
@@ -18,11 +18,14 @@ namespace NetMsgBus
 class NetFuture: public boost::enable_shared_from_this<NetFuture>
 {
 public:
+    typedef boost::function<void(const NetFuture&)> futureCB;
     void set_result(const char* pdata, size_t len)
     {
         core::common::locker_guard guard(wait_lock_);
         rsp_content_.assign(pdata, pdata + len);
         ready_ = true;
+        if (callback_)
+            callback_(*this);
         wait_cond_.notify_all();
     }
 
@@ -43,6 +46,14 @@ public:
             result = "wait time out.";
             return false;
         }
+        result = rsp_content_;
+        return true;
+    }
+
+    bool get(std::string& result) const
+    {
+        if(!ready_)
+            return false;
         result = rsp_content_;
         return true;
     }
@@ -77,9 +88,10 @@ public:
         }
         return ready;
     }
-    NetFuture()
+    NetFuture(futureCB cb = NULL)
         :ready_(false),
-        generated_time_(time(NULL))
+        generated_time_(time(NULL)),
+        callback_(cb)
     {
     }
 
@@ -87,6 +99,7 @@ private:
     bool ready_;
     std::string rsp_content_;
     time_t  generated_time_;
+    futureCB callback_;
     core::common::locker wait_lock_;
     core::common::condition wait_cond_;
     static const int MAX_EXIST_TIME = 120;

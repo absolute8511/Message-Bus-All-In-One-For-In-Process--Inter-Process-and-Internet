@@ -76,19 +76,20 @@ bool msgbus_postmsg_broadcast(uint32_t data_len, boost::shared_array<char> data)
 }
 
 // 直接使用缓存的客户端信息发送消息，如果缓存不存在会获取服务器上的数据后再重试
-boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data)
+boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& clientname, uint32_t data_len,
+    boost::shared_array<char> data, NetFuture::futureCB callback)
 {
     if(!sp_req2receiver_mgr)
         return boost::shared_ptr<NetFuture>();
-    return sp_req2receiver_mgr->PostMsgDirectToClient(clientname, data_len, data);
+    return sp_req2receiver_mgr->PostMsgDirectToClient(clientname, data_len, data, callback);
 }
 //
 boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& dest_ip, unsigned short dest_port,
-    uint32_t data_len, boost::shared_array<char> data)
+    uint32_t data_len, boost::shared_array<char> data, NetFuture::futureCB callback)
 {
     if(dest_ip.empty() || !sp_req2receiver_mgr)
         return boost::shared_ptr<NetFuture>();
-    return sp_req2receiver_mgr->PostMsgDirectToClient(dest_ip, dest_port, data_len, data);
+    return sp_req2receiver_mgr->PostMsgDirectToClient(dest_ip, dest_port, data_len, data, callback);
 }
 
 bool msgbus_req_receiver_info(const std::string& clientname)
