@@ -41,6 +41,8 @@ class ReceiverChannel(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
+        if not self.connected:
+            return
         with self.writelock:
         #log.debug('begin write data to receiver client: %s', self.addr)
             sent = self.send(self.buffer)

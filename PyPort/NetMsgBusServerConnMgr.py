@@ -89,6 +89,8 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
+        if not self.connected:
+            return
         with self.writelocker:
             sent = self.send(self.buffer)
             self.buffer = self.buffer[sent:]
@@ -263,7 +265,9 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         sendmsg_req = MsgBusSendMsgReq()
         sendmsg_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         sendmsg_req.from_name = self.receiver_name.ljust(MAX_SERVICE_NAME, '\0')
-        sendmsg_req.msg_id = int(time.time())
+        tickid = time.time()
+        tickid -= int(tickid)/1000000*1000000
+        sendmsg_req.msg_id = int(tickid*1000)
         log.debug('server tick msgid %d, sendmsg use server relay from:%s, to:%s.', sendmsg_req.msg_id, sendmsg_req.from_name, sendmsg_req.dest_name);
         sendmsg_req.SetMsgContent(data)
         with self.writelocker:

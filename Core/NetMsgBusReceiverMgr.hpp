@@ -247,7 +247,6 @@ private:
             boost::unordered_map<int, std::string>::iterator senderit = m_client_senders.find(sp_tcp->GetFD());
             if(senderit == m_client_senders.end())
             {
-                //printf("check sender identity:%lld\n", (int64_t)core::utility::GetTickCount());
                 std::string sendername;
                 // cache is not exist, find in msgcontent
                 if(!CheckMsgSender(msgcontent, sendername))
@@ -263,6 +262,7 @@ private:
                 {
                     m_client_senders[sp_tcp->GetFD()] = sendername;
                 }
+                printf("check sender identity:%lld, sender:%s \n", (int64_t)core::utility::GetTickCount(), sendername.c_str());
             }
             if(sync_sid != 0)
             {

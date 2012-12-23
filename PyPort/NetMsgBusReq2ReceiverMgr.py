@@ -54,6 +54,8 @@ class Req2ReceiverChannel(asyncore.dispatcher):
             self.close()
             self.is_closed = True
             return
+        if not self.connected:
+            return
         with self.writelock:
             sent = self.send(self.buffer)
             self.buffer = self.buffer[sent:]
@@ -124,7 +126,7 @@ class TcpClientPool:
         self.select_cnt = 0
         self.req2receivermgr = req2receivermgr
 
-    def CreateTcpConn(self, ipport, num=5):
+    def CreateTcpConn(self, ipport, num=5, callback = None):
         with self.channel_lock:
             if ipport not in self.channels.keys():
                 self.channels[ipport] = []
@@ -135,6 +137,8 @@ class TcpClientPool:
                 return host_channels[(self.select_cnt) % len(host_channels)]
             for i in range(num - len(host_channels)):
                 channel = Req2ReceiverChannel(ipport[0], ipport[1], self.sockmap, self.req2receivermgr)
+                if callback is not None:
+                    callback(channel)
                 host_channels.append(channel)
             return host_channels[self.select_cnt % len(host_channels) ]
 
@@ -206,13 +210,14 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
 
     def RemoveFuture(self, futureid):
         with self.future_map_lock:
-            self.future_map.remove(futureid)
+            del self.future_map[futureid]
 
     def handle_channel_close(self):
         log.debug('handle a receiver channel closed')
-        for k,v in self.future_map.items():
-            if v.is_bad:
-                del self.future_map[k]
+        with self.future_map_lock:
+            for k,v in self.future_map.items():
+                if v.is_bad():
+                    del self.future_map[k]
 
     def handle_channel_rsp(self, futureid, data):
         future_rsp = None
@@ -288,7 +293,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
                     return (False, None)
                 return (True, None)
 
-        newtcp = self.tcp_conn_pool.CreateTcpConn(destclient)
+        newtcp = self.tcp_conn_pool.CreateTcpConn(destclient, callback = self.IdentiySelfToReceiver)
         if newtcp is None:
             log.debug('tcp create failed')
             if task['retry']:
@@ -298,8 +303,6 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
                 self.RemoveFuture(task['future'][0])
                 return (False, None)
             return (True, None)
-        # first identify me to the receiver.
-        self.IdentiySelfToReceiver(newtcp)
 
         rsp_content = self.WriteTaskDataToReceiver(newtcp, task)
         return (True, rsp_content)
@@ -322,7 +325,8 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
 
         req.SetMsgData(task['data'])
         newtcp.buffer += req.PackData() 
-        newtcp.handle_write()
+        if newtcp.connected:
+            newtcp.handle_write()
         # 如果要求同步发送， 则等待
         result = None
         if (task['sync']):

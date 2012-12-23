@@ -464,8 +464,10 @@ class ReceiverMsgUtil:
         msgid = ReceiverMsgUtil.EncodeMsgKeyValue(msgid)
         msgparam = ReceiverMsgUtil.EncodeMsgKeyValue(msgparam)
         msgsender = ReceiverMsgUtil.EncodeMsgKeyValue(msgsender)
-        netmsg_str = ''
-        return 'msgid=' + msgid + '&msgparam=' + msgparam + '&msgsender=' + msgsender
+        netmsg_str = 'msgid=' + msgid + '&msgparam=' + msgparam
+        if len(msgsender) == 0 :
+            return netmsg_str
+        return netmsg_str + '&msgsender=' + msgsender + '\0'
 
 class ReceiverSendMsgReq:
     def __init__(self):
