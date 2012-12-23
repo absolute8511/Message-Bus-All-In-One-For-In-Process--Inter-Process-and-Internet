@@ -17,6 +17,7 @@ class Req2ReceiverChannel(asyncore.dispatcher):
         asyncore.dispatcher.__init__(self, map=sockmap)
         self.dest_ip = destip
         self.dest_port = destport
+        self.writelock = threading.Lock()
         self.buffer = ''
         self.read_buffer = ''
         self.need_stop = False
@@ -53,8 +54,9 @@ class Req2ReceiverChannel(asyncore.dispatcher):
             self.close()
             self.is_closed = True
             return
-        sent = self.send(self.buffer)
-        self.buffer = self.buffer[sent:]
+        with self.writelock:
+            sent = self.send(self.buffer)
+            self.buffer = self.buffer[sent:]
 
     def handle_error(self):
         self.req2receivermgr.handle_channel_close()
@@ -320,6 +322,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
 
         req.SetMsgData(task['data'])
         newtcp.buffer += req.PackData() 
+        newtcp.handle_write()
         # 如果要求同步发送， 则等待
         result = None
         if (task['sync']):

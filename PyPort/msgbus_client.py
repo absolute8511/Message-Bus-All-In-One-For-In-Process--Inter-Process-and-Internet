@@ -64,15 +64,15 @@ class NetMsgBus:
 
     @staticmethod
     def UpdateReceiverState(busy_state):
-        NetMsgBus.serverconn_mgr.UpdateReceiverState(busy_state)
+        return NetMsgBus.serverconn_mgr.UpdateReceiverState(busy_state)
 
     @staticmethod
     def NetQueryHostInfo(dest_name):
-        NetMsgBus.serverconn_mgr.ReqReceiverInfo(dest_name)
+        return NetMsgBus.serverconn_mgr.ReqReceiverInfo(dest_name)
 
     @staticmethod
     def NetQueryAvailableServices(match_msgstr):
-        NetMsgBus.serverconn_mgr.QueryAvailableServices(match_msgstr)
+        return NetMsgBus.serverconn_mgr.QueryAvailableServices(match_msgstr)
 
     @staticmethod
     def NetSendMsg(destname_or_ipport, msgid, msgdata, sendtype):

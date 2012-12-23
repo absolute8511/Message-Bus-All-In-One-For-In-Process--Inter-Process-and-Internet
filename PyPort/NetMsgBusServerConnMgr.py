@@ -221,12 +221,14 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         #print "".join('%#04x' % ord(c) for c in reg_req.PackData())
         with self.writelocker:
             self.buffer += reg_req.PackData() 
+        if self.connected:
+            self.handle_write()
         return True
 
     def UpdateReceiverState(self, busy_state):
         if self.receiver_port == 0 or self.receiver_name == '':
-            return
-        self.RegisterNetMsgBusReceiver(self.receiver_ip, self.receiver_port, self.receiver_name, busy_state)
+            return False
+        return self.RegisterNetMsgBusReceiver(self.receiver_ip, self.receiver_port, self.receiver_name, busy_state)
 
     def UnRegisterNetMsgBusReceiver(self):
         if not self.connected:
@@ -241,14 +243,19 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         unreg_req.service_host = host
         with self.writelocker:
             self.buffer += unreg_req.PackData()
+        self.handle_write()
         self.isreceiver_registered = False
         return True
 
     def ConfirmAlive(self):
+        if not self.connected:
+            return False
         req = MsgBusConfirmAliveReq()
         req.alive_flag = 0
         with self.writelocker:
             self.buffer += req.PackData()
+        self.handle_write()
+        return True
 
     def PostNetMsgUseServerRelay(self, clientname, data):
         if not self.connected:
@@ -261,6 +268,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         sendmsg_req.SetMsgContent(data)
         with self.writelocker:
             self.buffer += sendmsg_req.PackData()
+        self.handle_write()
         return True
 
     def ReqReceiverInfo(self, clientname):
@@ -270,6 +278,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         get_client_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         with self.writelocker:
             self.buffer += get_client_req.PackData()
+        self.handle_write()
         return True
 
     def QueryAvailableServices(self, match_str):
@@ -284,6 +293,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         log.debug('begin query all available services. %s, pbtype:%s, pbdata len:%d', match_str, pbtype, len(pbreq.SerializeToString()))
         with self.writelocker:
             self.buffer += services_query.PackData()
+        self.handle_write()
         #print "".join('%#04x' % ord(c) for c in services_query.PackData())
         return True
 

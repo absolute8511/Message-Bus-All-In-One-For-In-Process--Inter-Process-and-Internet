@@ -17,6 +17,7 @@ class ReceiverChannel(asyncore.dispatcher):
         self.addr = addr
         self.last_active = time.time()
         self.buffer = ''
+        self.writelock = threading.Lock()
         self.read_buffer = ''
 
     def handle_close(self):
@@ -40,9 +41,10 @@ class ReceiverChannel(asyncore.dispatcher):
         return (len(self.buffer) > 0)
 
     def handle_write(self):
+        with self.writelock:
         #log.debug('begin write data to receiver client: %s', self.addr)
-        sent = self.send(self.buffer)
-        self.buffer = self.buffer[sent:]
+            sent = self.send(self.buffer)
+            self.buffer = self.buffer[sent:]
         self.last_active = time.time()
 
     def handle_error(self):
@@ -88,6 +90,7 @@ class ReceiverChannel(asyncore.dispatcher):
             rsp_pack.sync_sid = msg_pack.sync_sid
             rsp_pack.SetRspData(msgparam)
             self.buffer += rsp_pack.PackData()
+            self.handle_write()
             log.debug("process a sync request finished, sid:%d, msgid:%s, msgparam:%s", msg_pack.sync_sid, msgid, msgparam);
 
 class NetMsgBusReceiverMgr(asyncore.dispatcher):

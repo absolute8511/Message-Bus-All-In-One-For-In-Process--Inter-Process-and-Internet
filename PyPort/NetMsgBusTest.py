@@ -29,6 +29,7 @@ LocalMsgBus.InitMsgBus()
 test_handler = TestHandler()
 LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_localmsg_handler)
 LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_handler)
+# test non-staticmethod add will fail
 LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', test_handler.OnMsg)
 LocalMsgBus.AddHandler('msg_netmsgbus_testgetdata', TestHandler.StaticOnMsg)
 
@@ -36,6 +37,12 @@ NetMsgBus.Init('127.0.0.1', 19000, '', 9100, 'test.receiverclient_A')
 NetMsgBus.Wait(2)
 # test for server connection
 NetMsgBus.NetQueryHostInfo('test.receiverclient_B')
+NetMsgBus.Wait(2)
+# broadcast message.
+NetMsgBus.NetSendMsg('', 'test.broadcast.msgtestid', '123testserver_broadcast', kMsgSendType.SendUseServerRelay)
+NetMsgBus.Wait(2)
+# test send group message
+NetMsgBus.NetSendMsg('test.', 'test.group.msgtestid', '123testserver_group', kMsgSendType.SendUseServerRelay)
 NetMsgBus.Wait(2)
 NetMsgBus.NetSendMsg('test.receiverclient_B', 'test.postmsg', '123testserver_relay', kMsgSendType.SendUseServerRelay)
 NetMsgBus.Wait(2)
