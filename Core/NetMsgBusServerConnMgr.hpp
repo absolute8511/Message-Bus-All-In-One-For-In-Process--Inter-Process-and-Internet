@@ -255,7 +255,6 @@ public:
     void HandleRspSendMsg(const std::string& rsp_body)
     {// 本客户端通过服务器向其他客户端转发消息得到的服务器返回确认
         MsgBusSendMsgRsp rsp;
-        //assert(rsp_body.size() - sizeof(rsp.ret_code) - sizeof(rsp.msg_id) - sizeof(rsp.err_msg_len));
         rsp.UnPackBody(rsp_body.data(), rsp_body.size());
         if(rsp.ret_code == 0)
         {
@@ -268,7 +267,6 @@ public:
     void HandleReqSendMsg(const std::string& rsp_body)
     {// 收到服务器转发的其他客户端的发消息请求
         MsgBusSendMsgReq req;
-        //assert(rsp_body.size() - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
         req.UnPackBody(rsp_body.data(), rsp_body.size());
         if(!FilterMgr::FilterBySender(req.from_name))
         {

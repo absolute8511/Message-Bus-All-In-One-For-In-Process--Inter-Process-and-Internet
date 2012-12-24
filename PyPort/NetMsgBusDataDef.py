@@ -45,18 +45,19 @@ class MsgBusPackHead :
         self.magic = 0x66
         self.version = 0x0001
         self.msg_type = type # 0: request, 1: response, 2: notify
+        self.msg_id = 0
         self.body_type = msgbody_type
         self.body_len = 0
 
     def PackHead(self):
-        return struct.pack('!BHBiI', self.magic, self.version, self.msg_type, self.body_type, self.body_len) 
+        return struct.pack('!BHBIiI', self.magic, self.version, self.msg_type, self.msg_id, self.body_type, self.body_len) 
     def UnPackHead(self, data):
-        (self.magic, self.version, self.msg_type, self.body_type, self.body_len) = struct.unpack_from('!BHBiI', data, 0)
+        (self.magic, self.version, self.msg_type, self.msg_id, self.body_type, self.body_len) = struct.unpack_from('!BHBIiI', data, 0)
         if self.magic != 0x66 or self.version != 0x0001:
             return False
         return True
     def HeadSize(self):
-        return struct.calcsize('!BHBiI')
+        return struct.calcsize('!BHBIiI')
 
 class MsgBusPackHeadReq(MsgBusPackHead):
     def __init__(self, type):
@@ -274,24 +275,23 @@ class MsgBusSendMsgReq(MsgBusPackHeadReq):
         MsgBusPackHeadReq.__init__(self, kMsgBusBodyType.REQ_SENDMSG)
         self.dest_name = ''
         self.from_name = ''
-        self.msg_id = 0
         self.msg_len = 0
         self.msg_content = ''
 
     def PackBody(self):
-        return struct.pack('!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sII' + str(self.msg_len) + 's',
-                self.dest_name, self.from_name, self.msg_id, self.msg_len, self.msg_content)
+        return struct.pack('!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sI' + str(self.msg_len) + 's',
+                self.dest_name, self.from_name, self.msg_len, self.msg_content)
 
     def PackData(self):
         self.body_len = self.BodySize()
         return self.PackReqHead() + self.PackBody()
 
     def UnPackBody(self, data):
-        (self.dest_name, self.from_name, self.msg_id, self.msg_len) = struct.unpack_from(
-                '!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sII', data, 0)
+        (self.dest_name, self.from_name, self.msg_len) = struct.unpack_from(
+                '!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sI', data, 0)
         self.dest_name = self.dest_name.strip('\0')
         self.from_name = self.from_name.strip('\0')
-        used_size = struct.calcsize('!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sII')
+        used_size = struct.calcsize('!' + MAX_SERVICE_NAME_STR + 's' + MAX_SERVICE_NAME_STR + 'sI')
         (self.msg_content, ) = struct.unpack_from( '!' + str(self.msg_len) + 's', data, used_size)
 
     def UnPackData(self, data):
@@ -300,7 +300,7 @@ class MsgBusSendMsgReq(MsgBusPackHeadReq):
 
     def BodySize(self):
         return struct.calcsize('!' + MAX_SERVICE_NAME_STR + 's' +
-                MAX_SERVICE_NAME_STR + 'sII' + str(self.msg_len) + 's')
+                MAX_SERVICE_NAME_STR + 'sI' + str(self.msg_len) + 's')
 
     def GetMsgContent(self):
         return self.msg_content
@@ -324,20 +324,19 @@ class MsgBusSendMsgRsp(MsgBusPackHeadRsp):
     def __init__(self):
         MsgBusPackHeadRsp.__init__(self, kMsgBusBodyType.RSP_SENDMSG)
         self.ret_code = 0
-        self.msg_id = 0
         self.err_msg_len = 0
         self.err_msg = ''
 
     def PackBody(self):
-        return struct.pack('!HIH' + str(self.err_msg_len) + 's', self.ret_code, self.msg_id, self.err_msg_len, self.err_msg)
+        return struct.pack('!HH' + str(self.err_msg_len) + 's', self.ret_code, self.err_msg_len, self.err_msg)
 
     def PackData(self):
         self.body_len = self.BodySize()
         return self.PackRspHead() + self.PackBody()
 
     def UnPackBody(self, data):
-        (self.ret_code, self.msg_id, self.err_msg_len) = struct.unpack_from('!HIH', data, 0)
-        used_size = struct.calcsize('!HIH')
+        (self.ret_code, self.err_msg_len) = struct.unpack_from('!HH', data, 0)
+        used_size = struct.calcsize('!HH')
         (self.err_msg, ) = struct.unpack_from('!' + str(self.err_msg_len) + 's', data, used_size)
 
     def UnPackData(self, data):
@@ -345,7 +344,7 @@ class MsgBusSendMsgRsp(MsgBusPackHeadRsp):
         self.UnPackBody(data[self.RspHeadSize():])
 
     def BodySize(self):
-        return struct.calcsize('!HIH' + str(self.err_msg_len) + 's')
+        return struct.calcsize('!HH' + str(self.err_msg_len) + 's')
 
     def GetErrMsg(self):
         return self.err_msg

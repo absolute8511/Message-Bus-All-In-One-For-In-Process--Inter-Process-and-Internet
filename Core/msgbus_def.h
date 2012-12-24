@@ -61,6 +61,8 @@ public:
     MsgBusPackHead()
         :magic(0x66),
         version(0x0001),
+        msg_type(0),
+        msg_id(0),
         body_len(0)
     {
     }
@@ -79,6 +81,7 @@ public:
     uint8_t             magic;
     uint16_t            version;
     uint8_t             msg_type;   // 0: request, 1: response, 2: notify
+    uint32_t            msg_id;
     kMsgBusBodyType     body_type;
     uint32_t            body_len;
 };
@@ -293,7 +296,6 @@ public:
 
     char dest_name[MAX_SERVICE_NAME];
     char from_name[MAX_SERVICE_NAME];
-    uint32_t msg_id;
     uint32_t msg_len;
 private:
     char * msg_content;
@@ -330,7 +332,6 @@ public:
     void FreeVarData();
 
     uint16_t ret_code;
-    uint32_t msg_id;
     uint16_t err_msg_len;
 private:
     char * err_msg;

@@ -28,7 +28,9 @@ uint16_t MsgBusPackHead::PackHead(char *data, size_t len)
     *((uint16_t *)p) = htons(version);
     p += padding(p, sizeof(version), sizeof(msg_type));
     *((uint8_t *)p) = msg_type;
-    p += padding(p, sizeof(msg_type), sizeof(body_type));
+    p += padding(p, sizeof(msg_type), sizeof(msg_id));
+    *((uint32_t*)p) = htonl(msg_id);
+    p += padding(p, sizeof(msg_id), sizeof(body_type));
     *((kMsgBusBodyType *)p) = (kMsgBusBodyType)htonl(body_type);
     p += padding(p, sizeof(body_type), sizeof(body_len));
     *((uint32_t*)p) = htonl(body_len);
@@ -46,7 +48,9 @@ int MsgBusPackHead::UnPackHead(const char *data, size_t len)
     version = ntohs(*((uint16_t *)p));
     p += padding(p, sizeof(version), sizeof(msg_type));
     msg_type = *((uint8_t *)p);
-    p += padding(p, sizeof(msg_type), sizeof(body_type));
+    p += padding(p, sizeof(msg_type), sizeof(msg_id));
+    msg_id = ntohl(*((uint32_t*)p));
+    p += padding(p, sizeof(msg_id), sizeof(body_type));
     body_type = (kMsgBusBodyType)ntohl(*((kMsgBusBodyType *)p));
     p += padding(p, sizeof(body_type), sizeof(body_len));
     body_len = ntohl(*((uint32_t*)p));
@@ -569,8 +573,6 @@ void MsgBusSendMsgReq::PackBody(char *data, size_t len)
     p += MAX_SERVICE_NAME;
     strncpy(p, from_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
-    *((uint32_t*)p) = htonl(msg_id);
-    p += sizeof(msg_id);
     *((uint32_t*)p) = htonl(msg_len);
     p += sizeof(msg_len);
     memcpy(p, msg_content, msg_len);
@@ -589,17 +591,15 @@ int MsgBusSendMsgReq::UnPackBody(const char *data, size_t len)
 {
     const char *p = data;
     try{
-    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_id) + sizeof(msg_len) ))
+    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_len) ))
         return -1;
     strncpy(dest_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     strncpy(from_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
-    msg_id = ntohl(*((uint32_t*)p));
-    p += sizeof(msg_id);
     msg_len = ntohl(*((uint32_t*)p));
     p += sizeof(msg_len);
-    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_id) + sizeof(msg_len) + msg_len))
+    if( (len != 0) && (len < (MAX_SERVICE_NAME*2) + sizeof(msg_len) + msg_len))
         return -1;
     FreeVarData();
     needfree = true;
@@ -631,7 +631,7 @@ int MsgBusSendMsgReq::UnPackData(const char *data, size_t len)
 uint32_t MsgBusSendMsgReq::Size()
 {
 //    return sizeof(MsgBusSendMsgReq);
-    return MsgBusPackHeadReq::Size() + 2*MAX_SERVICE_NAME + sizeof(msg_id) + 
+    return MsgBusPackHeadReq::Size() + 2*MAX_SERVICE_NAME +
         sizeof(msg_len) + msg_len;
 }
 
@@ -659,8 +659,6 @@ void MsgBusSendMsgRsp::PackBody(char *data, size_t len)
     char *p = data;
     *((uint16_t *)p) = htons(ret_code);
     p += sizeof(ret_code);
-    *((uint32_t*)p) = htonl(msg_id);
-    p += sizeof(msg_id);
     *((uint16_t*)p) = htons(err_msg_len);
     p += sizeof(err_msg_len);
     strncpy(p, err_msg, err_msg_len);
@@ -683,15 +681,13 @@ int MsgBusSendMsgRsp::UnPackBody(const char *data, size_t len)
         return -1;
     ret_code = ntohs(*((uint16_t*)p));
     p += sizeof(ret_code);
-    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id)))
+    if( (len != 0) && (len < sizeof(ret_code)))
         return -1;
-    msg_id = ntohl(*((uint32_t*)p));
-    p += sizeof(msg_id);
-    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len)))
+    if( (len != 0) && (len < sizeof(ret_code) + sizeof(err_msg_len)))
         return -1;
     err_msg_len = ntohs(*((uint16_t*)p));
     p += sizeof(err_msg_len);
-    if( (len != 0) && (len < sizeof(ret_code) + sizeof(msg_id) + sizeof(err_msg_len) + err_msg_len))
+    if( (len != 0) && (len < sizeof(ret_code) + sizeof(err_msg_len) + err_msg_len))
         return -1;
     FreeVarData();
     needfree = true;
@@ -722,7 +718,7 @@ int MsgBusSendMsgRsp::UnPackData(const char *data, size_t len)
 }
 uint32_t MsgBusSendMsgRsp::Size()
 {
-    return MsgBusPackHeadRsp::Size() + sizeof(ret_code) + sizeof(msg_id) + 
+    return MsgBusPackHeadRsp::Size() + sizeof(ret_code) +
         sizeof(err_msg_len) + err_msg_len;
 }
 
