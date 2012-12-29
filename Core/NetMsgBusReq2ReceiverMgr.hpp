@@ -267,10 +267,8 @@ private:
         if(rsp.ret_code == 0)
         {
             LocalHostInfo hostinfo;
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &rsp.dest_host.server_ip, ip, sizeof(ip));
-            hostinfo.host_ip = ip;
-            hostinfo.host_port = ntohs(rsp.dest_host.server_port);
+            hostinfo.host_ip = rsp.dest_host.ip();
+            hostinfo.host_port = rsp.dest_host.port();
             LOG(g_log, lv_debug, "get client info returned. ret name : %s(%u), ip:port : %s:%d\n", clientname.c_str(), clientname.size(),
               hostinfo.host_ip.c_str(), 
               hostinfo.host_port);

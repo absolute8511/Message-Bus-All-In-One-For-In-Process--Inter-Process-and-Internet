@@ -6,6 +6,7 @@
 #define CORE_MSGBUS_DEF_H
 #include <stdint.h>
 #include <sys/types.h>
+#include <string>
 #define MAX_SERVICE_NAME 64
 
 namespace NetMsgBus
@@ -38,21 +39,18 @@ enum kMsgBusBodyType {
 };
 
 typedef struct S_ClientHostInfo {
-    S_ClientHostInfo(uint32_t ip, unsigned short int port)
-        :server_ip(ip),
-        server_port(port),
-        busy_state(LOW)
-    {
-    }
-    S_ClientHostInfo()
-        :server_ip(0),
-        server_port(0),
-        busy_state(LOW)
-    {
-    }
-    uint32_t  server_ip;
-    unsigned short int server_port;
-    kServerBusyState  busy_state;
+    S_ClientHostInfo(const std::string& ip_str, unsigned short int port);
+    S_ClientHostInfo();
+    void set_ip(const std::string& ip_str);
+    void set_port(unsigned short int port);
+    void set_state(kServerBusyState state);
+    std::string ip() const;
+    unsigned short int port() const;
+    kServerBusyState state() const;
+private:
+    uint32_t  ip_;
+    unsigned short int port_;
+    int32_t busy_state_;
 } ClientHost;
 
 class MsgBusPackHead 
@@ -386,8 +384,8 @@ struct ClientHostIsEqual
 {
     bool operator()(const ClientHost& left,const ClientHost& right)
     {
-       return (left.server_ip == right.server_ip) && 
-             (left.server_port == right.server_port);
+       return (left.ip() == right.ip()) && 
+             (left.port() == right.port());
     }
 };
 

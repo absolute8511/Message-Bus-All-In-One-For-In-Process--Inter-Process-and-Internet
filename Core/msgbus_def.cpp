@@ -18,6 +18,60 @@ int32_t padding(const void* pointer, int32_t prev_size, int32_t next_size)
     return prev_size;
 }
 
+S_ClientHostInfo::S_ClientHostInfo()
+{
+    ip_ = 0;
+    port_ = 0;
+    busy_state_ = htonl(LOW);
+}
+S_ClientHostInfo::S_ClientHostInfo(const std::string& ip_str, unsigned short int port)
+{
+    int ret = inet_pton(AF_INET, ip_str.c_str(), &ip_);
+    if(ret != 1)
+    {
+        perror("set ip error");
+        ip_ = 0;
+    }
+    port_ = htons(port);
+    busy_state_ = htonl(LOW);
+}
+void S_ClientHostInfo::set_ip(const std::string& ip_str)
+{
+    int ret = inet_pton(AF_INET, ip_str.c_str(), &ip_);
+    if (ret != 1)
+    {
+        perror("set ip error");
+        ip_ = 0;
+    }
+}
+void S_ClientHostInfo::set_port(unsigned short int port)
+{
+    port_ = htons(port);
+}
+void S_ClientHostInfo::set_state(kServerBusyState state)
+{
+    busy_state_ = htonl(state);
+}
+std::string S_ClientHostInfo::ip() const
+{
+    std::string str;
+    if(ip_ == 0)
+        return str;
+    str.resize(INET6_ADDRSTRLEN);
+    if (inet_ntop(AF_INET, &ip_, &str[0], INET6_ADDRSTRLEN) == NULL)
+        perror("get ip error.");
+    return str;
+}
+
+unsigned short int S_ClientHostInfo::port() const
+{
+    return ntohs(port_);
+}
+kServerBusyState S_ClientHostInfo::state() const
+{
+    return kServerBusyState(ntohl(busy_state_));
+}
+
 uint16_t MsgBusPackHead::PackHead(char *data, size_t len)
 {
     if(len != 0 && len < Size())
@@ -117,7 +171,6 @@ void MsgBusRegisterReq::PackBody(char *data, size_t len)
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
-    service_host.busy_state = (kServerBusyState)htonl(service_host.busy_state);
     *((ClientHost *)p) = service_host;
 }
 void MsgBusRegisterReq::PackData(char *data, size_t len)
@@ -139,7 +192,6 @@ int MsgBusRegisterReq::UnPackBody(const char *data, size_t len)
     strncpy(service_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     service_host = *((ClientHost*)p);
-    service_host.busy_state = (kServerBusyState)ntohl(service_host.busy_state);
     return 0;
     }
     catch(...)
@@ -264,7 +316,6 @@ void MsgBusUnRegisterReq::PackBody(char *data, size_t len)
     char *p = data;
     strncpy(p, service_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
-    service_host.busy_state = (kServerBusyState)htonl(service_host.busy_state);
     *((ClientHost *)p) = service_host;
 }
 void MsgBusUnRegisterReq::PackData(char *data, size_t len)
@@ -286,7 +337,6 @@ int MsgBusUnRegisterReq::UnPackBody(const char *data, size_t len)
     strncpy(service_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     service_host = *((ClientHost*)p);
-    service_host.busy_state = (kServerBusyState)ntohl(service_host.busy_state);
     return 0;
     }
     catch(...)
@@ -492,7 +542,6 @@ void MsgBusGetClientRsp::PackBody(char *data, size_t len)
     p += sizeof(ret_code);
     strncpy(p, dest_name, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
-    dest_host.busy_state = (kServerBusyState)htonl(dest_host.busy_state);
     *((ClientHost *)p) = dest_host;
 }
 void MsgBusGetClientRsp::PackData(char *data, size_t len)
@@ -516,7 +565,6 @@ int MsgBusGetClientRsp::UnPackBody(const char *data, size_t len)
     strncpy(dest_name, p, MAX_SERVICE_NAME);
     p += MAX_SERVICE_NAME;
     dest_host = *((ClientHost *)p);
-    dest_host.busy_state = (kServerBusyState)ntohl(dest_host.busy_state);
     return 0;
     }
     catch(...)

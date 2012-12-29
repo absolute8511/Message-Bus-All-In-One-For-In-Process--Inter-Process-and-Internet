@@ -334,14 +334,12 @@ public:
         if(!m_server_connecting)
             return false;
         ClientHost host;
-        host.server_ip = 0;
         if(clientip != "")
         {
-            inet_pton(AF_INET, clientip.c_str(), &host.server_ip);
-            //host.server_ip = inet_addr(clientip.c_str());
+            host.set_ip(clientip);
         }
-        host.server_port = htons(clientport);
-        host.busy_state = busy_state;
+        host.set_port(clientport);
+        host.set_state(busy_state);
 
         MsgBusRegisterReq reg_req;
         assert(clientname.size() < MAX_SERVICE_NAME);
@@ -365,13 +363,11 @@ public:
         strncpy(unreg_req.service_name, m_receiver_name.c_str(), MAX_SERVICE_NAME);
         unreg_req.service_name[m_receiver_name.size()] = '\0';
         ClientHost host;
-        host.server_ip = 0;
         if(m_receiver_ip != "")
         {
-            inet_pton(AF_INET, m_receiver_ip.c_str(), &host.server_ip);
-            //host.server_ip = inet_addr(m_receiver_ip.c_str());
+            host.set_ip(m_receiver_ip);
         }
-        host.server_port = htons(m_receiver_port);
+        host.set_port(m_receiver_port);
         unreg_req.service_host = host;
         boost::shared_array<char> outbuffer(new char[unreg_req.Size()]);
         unreg_req.PackData(outbuffer.get());

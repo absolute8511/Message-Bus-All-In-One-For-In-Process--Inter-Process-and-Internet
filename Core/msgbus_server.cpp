@@ -501,14 +501,14 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
     else
     {
         ClientHost host = reg_req.service_host;
-        if(host.server_ip == 0)
+        if(host.ip().empty())
         {
             if(sp_tcp)
             {
                 std::string ip;
                 unsigned short int port;
                 sp_tcp->GetDestHost(ip, port);
-                inet_pton(AF_INET, ip.c_str(), &host.server_ip);
+                host.set_ip(ip);
             }
             else
             {
@@ -527,8 +527,8 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
             if (pos != it->second.end())
             {
                 // update the server host state
-                pos->busy_state = host.busy_state;
-                g_log.Log(lv_debug, "update the server host state.new state %d.", host.busy_state);
+                pos->set_state(host.state());
+                g_log.Log(lv_debug, "update the server host state.new state %d.", host.state());
             }
             else
             {
@@ -537,12 +537,12 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
                 active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
                 g_log.Log(lv_debug, "a new host added to an exist service.");
                 g_log.Log(lv_debug, "new add server host is %s:%d.", 
-                    inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
+                    host.ip().c_str(), host.port());
             }
         }
         else
         {
-            if(host.server_port != 0)
+            if(host.port() != 0)
             {
                 // port is zero just mean not a service provider, just connected for send/recv data 
                 // by the tcp connection of msgbus_server.
@@ -553,7 +553,7 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
             // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
             active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
             g_log.Log(lv_debug, "new register service, server host is %s:%d.",
-                inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
+                host.ip().c_str(), host.port());
         }
     }
     assert(rsp.err_msg_len);
@@ -583,15 +583,14 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
     {
         ClientHost host = unreg_req.service_host;
         g_log.Log(lv_debug, "receive unregister request, name:%s.", service_name.c_str());
-        if(host.server_ip == 0)
+        if(host.ip().empty())
         {
             if(sp_tcp)
             {
                 std::string ip;
                 unsigned short int port;
                 sp_tcp->GetDestHost(ip, port);
-                //host.server_ip = inet_addr(ip.c_str());
-                inet_pton(AF_INET, ip.c_str(), &host.server_ip);
+                host.set_ip(ip);
             }
             else
             {
@@ -609,7 +608,7 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
                 // update the server host state
                 it->second.erase(pos);
                 g_log.Log(lv_debug,"unregister server host is %s:%d", 
-                    inet_ntoa(*((in_addr*)&host.server_ip)), ntohs(host.server_port));
+                    host.ip().c_str(), host.port());
                 if(it->second.empty())
                     available_services.erase(it);
             }
