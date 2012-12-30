@@ -67,6 +67,10 @@ static ServiceContainer available_services;
 // 这个容器是和服务器有活动的tcp连接的所有具备服务的主机。
 typedef map< string, TcpSockContainerT > ActiveClientTcpContainer;
 static ActiveClientTcpContainer active_clients;
+
+typedef map<int, ClientHost>  TcpServicesMap;
+static TcpServicesMap  tcp_services_map;  // keep the relationship between the tcp connection and the service it's suppling.
+
 core::common::locker g_activeclients_locker;
 static volatile bool s_netmsgbus_server_running = false;
 static volatile bool s_netmsgbus_server_terminate = false;
@@ -214,12 +218,16 @@ void unregister_client_from_service(const std::string& service_name, const Clien
             it->second.end(), &host, &host + 1, ClientHostIsEqual());
         if (pos != it->second.end())
         {
-            // update the server host state
             it->second.erase(pos);
-            g_log.Log(lv_debug,"unregister server host is %s:%d", 
-                host.ip().c_str(), host.port());
+            g_log.Log(lv_debug,"unregister service host %s:%d from %s.", 
+                host.ip().c_str(), host.port(), service_name.c_str());
             if(it->second.empty())
                 available_services.erase(it);
+        }
+        else
+        {
+            g_log.Log(lv_debug,"unregister service host %s:%d from %s not found", 
+                host.ip().c_str(), host.port(), service_name.c_str());
         }
     }
 }
@@ -266,6 +274,7 @@ void* msgbus_server_accept_thread( void* param )
     int max_sockfd = server_sockfd;
     available_services.clear();
     active_clients.clear();
+    tcp_services_map.clear();
 //
 //#if defined (__APPLE__) || defined (__MACH__) 
 //    boost::shared_ptr< SockWaiterBase > spwaiter(new SelectWaiter());
@@ -466,29 +475,28 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
     // remove the client info from the map.
     std::string service_name;
     ClientHost host;
-    std::string ip;
-    unsigned short int port;
-    sp_tcp->GetDestHost(ip, port);
-    host.set_ip(ip);
-    host.set_port(port);
-    core::common::locker_guard guard(g_activeclients_locker);
-    ActiveClientTcpContainer::iterator it = active_clients.begin();
-    while( it != active_clients.end() )
     {
-        //TcpSockContainerT::iterator clientit = std::find_if(it->second.begin(), it->second.end(), IsSameTcpSock( sp_tcp ));
-        TcpSockContainerT::iterator clientit = it->second.find((long)sp_tcp.get());
-        if( clientit != it->second.end() )
-        {   
-            assert(sp_tcp->GetFD() == clientit->second->GetFD());
-            g_log.Log(lv_debug, "removing client fd: %d , one active of service:%s ,in server.",
-                sp_tcp->GetFD(), it->first.c_str());
-            service_name = it->first;
-            it->second.erase(clientit);
-            if(it->second.empty())
-                active_clients.erase(it);
-            break;
+        core::common::locker_guard guard(g_activeclients_locker);
+        ActiveClientTcpContainer::iterator it = active_clients.begin();
+        while( it != active_clients.end() )
+        {
+            //TcpSockContainerT::iterator clientit = std::find_if(it->second.begin(), it->second.end(), IsSameTcpSock( sp_tcp ));
+            TcpSockContainerT::iterator clientit = it->second.find((long)sp_tcp.get());
+            if( clientit != it->second.end() )
+            {   
+                assert(sp_tcp->GetFD() == clientit->second->GetFD());
+                host = tcp_services_map[sp_tcp->GetFD()];
+                service_name = it->first;
+                g_log.Log(lv_debug, "removing client fd: %d, %s:%d , one active of service:%s ,in server.",
+                    sp_tcp->GetFD(), host.ip().c_str(), host.port(), service_name.c_str());
+                it->second.erase(clientit);
+                tcp_services_map.erase(sp_tcp->GetFD());
+                if(it->second.empty())
+                    active_clients.erase(it);
+                break;
+            }
+            ++it;
         }
-        ++it;
     }
     unregister_client_from_service(service_name, host);
 }
@@ -564,6 +572,7 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
                 it->second.push_back(host);
                 // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
                 active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
+                tcp_services_map[sp_tcp->GetFD()] = host;
                 g_log.Log(lv_debug, "a new host added to an exist service.");
                 g_log.Log(lv_debug, "new add server host is %s:%d.", 
                     host.ip().c_str(), host.port());
@@ -581,7 +590,8 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
             }
             // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
             active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
-            g_log.Log(lv_debug, "new register service, server host is %s:%d.",
+            tcp_services_map[sp_tcp->GetFD()] = host;
+            g_log.Log(lv_debug, "new register service:%s, server host is %s:%d.", service_name.c_str(),
                 host.ip().c_str(), host.port());
         }
     }
