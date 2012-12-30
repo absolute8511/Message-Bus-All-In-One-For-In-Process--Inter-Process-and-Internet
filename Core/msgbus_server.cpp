@@ -204,6 +204,26 @@ bool msgbus_select_best_client(const ClientHostContainer& container, ClientHost&
     }
 }
 
+void unregister_client_from_service(const std::string& service_name, const ClientHost& host)
+{
+    core::common::locker_guard guard(g_activeclients_locker);
+    ServiceContainer::iterator it = available_services.find(service_name);
+    if (it != available_services.end())
+    {
+        ClientHostContainer::iterator pos = std::find_first_of(it->second.begin(), 
+            it->second.end(), &host, &host + 1, ClientHostIsEqual());
+        if (pos != it->second.end())
+        {
+            // update the server host state
+            it->second.erase(pos);
+            g_log.Log(lv_debug,"unregister server host is %s:%d", 
+                host.ip().c_str(), host.port());
+            if(it->second.empty())
+                available_services.erase(it);
+        }
+    }
+}
+
 // 接收客户端请求的处理线程
 void* msgbus_server_accept_thread( void* param )
 {
@@ -444,6 +464,13 @@ void server_onError(TcpSockSmartPtr sp_tcp)
 void server_onClose(TcpSockSmartPtr sp_tcp)
 {
     // remove the client info from the map.
+    std::string service_name;
+    ClientHost host;
+    std::string ip;
+    unsigned short int port;
+    sp_tcp->GetDestHost(ip, port);
+    host.set_ip(ip);
+    host.set_port(port);
     core::common::locker_guard guard(g_activeclients_locker);
     ActiveClientTcpContainer::iterator it = active_clients.begin();
     while( it != active_clients.end() )
@@ -455,6 +482,7 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
             assert(sp_tcp->GetFD() == clientit->second->GetFD());
             g_log.Log(lv_debug, "removing client fd: %d , one active of service:%s ,in server.",
                 sp_tcp->GetFD(), it->first.c_str());
+            service_name = it->first;
             it->second.erase(clientit);
             if(it->second.empty())
                 active_clients.erase(it);
@@ -462,6 +490,7 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
         }
         ++it;
     }
+    unregister_client_from_service(service_name, host);
 }
 
 void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
@@ -597,22 +626,7 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
                 return;
             }
         }
-        core::common::locker_guard guard(g_activeclients_locker);
-        ServiceContainer::iterator it = available_services.find(service_name);
-        if (it != available_services.end())
-        {
-            ClientHostContainer::iterator pos = std::find_first_of(it->second.begin(), 
-                it->second.end(), &host, &host + 1, ClientHostIsEqual());
-            if (pos != it->second.end())
-            {
-                // update the server host state
-                it->second.erase(pos);
-                g_log.Log(lv_debug,"unregister server host is %s:%d", 
-                    host.ip().c_str(), host.port());
-                if(it->second.empty())
-                    available_services.erase(it);
-            }
-        }
+        unregister_client_from_service(service_name, host);
     }
 }
 
