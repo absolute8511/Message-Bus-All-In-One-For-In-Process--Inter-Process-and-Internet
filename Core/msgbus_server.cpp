@@ -95,18 +95,18 @@ class PBHandlerBase
 {
 public:
     virtual ~PBHandlerBase(){};
-    virtual void onPbData(TcpSockSmartPtr sp_tcp, const string& pbtype, const string& pbdata) const = 0;
+    virtual void onPbData(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, const string& pbtype, const string& pbdata) const = 0;
 };
 
 template <typename T> class PBHandlerT: public PBHandlerBase
 {
 public:
-    typedef boost::function<void(TcpSockSmartPtr sp_tcp, T*)> PBHandlerCB;
+    typedef boost::function<void(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, T*)> PBHandlerCB;
     PBHandlerT(const PBHandlerCB& cb)
         :cb_(cb)
     {
     }
-    virtual void onPbData(TcpSockSmartPtr sp_tcp, const string& pbtype, const string& pbdata) const
+    virtual void onPbData(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, const string& pbtype, const string& pbdata) const
     {
         const google::protobuf::DescriptorPool* pool = google::protobuf::DescriptorPool::generated_pool();
         const google::protobuf::Descriptor* desp = pool->FindMessageTypeByName(pbtype);
@@ -118,7 +118,7 @@ public:
             {
                 T *t = dynamic_cast<T*>(msg);
                 assert(cb_ != NULL);
-                cb_(sp_tcp, t);
+                cb_(sp_tcp, head, t);
             }
         }
     }
@@ -136,12 +136,12 @@ template<typename T> void regist_pbdata_handler(const typename PBHandlerT<T>::PB
 }
 
 void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer);
-void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
-void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
-void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
-void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
-void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
-void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_register_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_unregister_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_sendmsg_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_getclient_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
+void process_pbbody_data(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len);
 
 size_t server_onRead(TcpSockSmartPtr sp_tcp, const char* pdata, size_t size);
 bool server_onSend(TcpSockSmartPtr sp_tcp);
@@ -423,32 +423,32 @@ void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head
         {
         case REQ_REGISTER:
             {
-                process_register_req(sp_tcp, bodybuffer, head.body_len);
+                process_register_req(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         case REQ_GETCLIENT:
             {
-                process_getclient_req(sp_tcp, bodybuffer, head.body_len);
+                process_getclient_req(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         case REQ_SENDMSG:
             {
-                process_sendmsg_req(sp_tcp, bodybuffer, head.body_len);
+                process_sendmsg_req(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         case REQ_UNREGISTER:
             {
-                process_unregister_req(sp_tcp, bodybuffer, head.body_len);
+                process_unregister_req(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         case REQ_CONFIRM_ALIVE:
             {
-                process_confirm_alive_req(sp_tcp, bodybuffer, head.body_len);
+                process_confirm_alive_req(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         case BODY_PBTYPE:
             {
-                process_pbbody_data(sp_tcp, bodybuffer, head.body_len);
+                process_pbbody_data(sp_tcp, head, bodybuffer, head.body_len);
             }
             break;
         default:
@@ -513,7 +513,7 @@ void server_onClose(TcpSockSmartPtr sp_tcp)
     unregister_client_from_service(service_name, host);
 }
 
-void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusConfirmAliveReq alive_req;
     alive_req.UnPackBody(bodybuffer.get());
@@ -522,6 +522,7 @@ void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char>
         g_log.Log(lv_debug, "keep alive flag is wrong. flag:%d .", alive_req.alive_flag);
     }
     MsgBusConfirmAliveRsp rsp;
+    rsp.msg_id = head.msg_id;
     rsp.ret_code = alive_req.alive_flag;
     boost::shared_array<char> buf(new char[rsp.Size()]);
     rsp.PackData(buf.get());
@@ -529,13 +530,14 @@ void process_confirm_alive_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char>
         sp_tcp->SendData(buf.get(), rsp.Size());
 }
 
-void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_register_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusRegisterReq reg_req;
     reg_req.UnPackBody(bodybuffer.get());
     string service_name(reg_req.service_name);
 
     MsgBusRegisterRsp rsp;
+    rsp.msg_id = head.msg_id;
     rsp.ret_code = 0;
     rsp.err_msg_len = 1;
     strncpy(rsp.service_name, reg_req.service_name, MAX_SERVICE_NAME);
@@ -637,7 +639,7 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
         sp_tcp->SendData(outbuffer.get(), rsp.Size());
 }
 
-void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_unregister_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusUnRegisterReq unreg_req;
     unreg_req.UnPackBody(bodybuffer.get());
@@ -669,7 +671,7 @@ void process_unregister_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bo
     }
 }
 
-void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_sendmsg_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusSendMsgReq req;
     //assert(body_len - sizeof(req.msg_id) - sizeof(req.msg_len) - MAX_SERVICE_NAME*2);
@@ -696,7 +698,7 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
         }
     }
     MsgBusSendMsgRsp rsp;
-    rsp.msg_id = req.msg_id;
+    rsp.msg_id = head.msg_id;
     rsp.ret_code = 0;
     rsp.err_msg_len = 2;
 
@@ -743,7 +745,7 @@ void process_sendmsg_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
         sp_tcp->SendData(rspbuffer.get(), rsp.Size());
 }
 
-void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_getclient_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusGetClientReq req;
     req.UnPackBody(bodybuffer.get());
@@ -751,6 +753,7 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
     g_log.Log(lv_debug, "receive get client info request, client name:%s.", dest_name.c_str());
 
     MsgBusGetClientRsp rsp;
+    rsp.msg_id = head.msg_id;
     strncpy(rsp.dest_name, req.dest_name, MAX_SERVICE_NAME);
     g_log.Log(lv_debug, "rsp client name:%s.", rsp.dest_name);
 
@@ -772,7 +775,7 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bod
         sp_tcp->SendData(outbuffer.get(), rsp.Size());
 }
 
-void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodybuffer, uint32_t body_len)
+void process_pbbody_data(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, boost::shared_array<char> bodybuffer, uint32_t body_len)
 {
     MsgBusPackPBType pbbody;
 
@@ -782,7 +785,7 @@ void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
     PBHandlerContainerT::const_iterator cit = s_pb_handlers.find(pbtype);
     if(cit != s_pb_handlers.end())
     {
-        cit->second->onPbData(sp_tcp, pbtype, pbdata);
+        cit->second->onPbData(sp_tcp, head, pbtype, pbdata);
     }
     else
     {
@@ -790,7 +793,7 @@ void process_pbbody_data(TcpSockSmartPtr sp_tcp, boost::shared_array<char> bodyb
     }
 }
 
-void onQueryServicesReq(TcpSockSmartPtr sp_tcp, PBQueryServicesReq* req)
+void onQueryServicesReq(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, PBQueryServicesReq* req)
 {
     std::string prefix = req->match_prefix();
     g_log.Log(lv_debug, "receive query service requst, prefix:%s", prefix.c_str());
@@ -809,6 +812,7 @@ void onQueryServicesReq(TcpSockSmartPtr sp_tcp, PBQueryServicesReq* req)
         } 
     }
     MsgBusPackPBType packpb;
+    packpb.msg_id = head.msg_id;
     std::string pbtype = PBQueryServicesRsp::descriptor()->full_name();
     pbtype.push_back('\0');
     packpb.pbtype_len = pbtype.size();
