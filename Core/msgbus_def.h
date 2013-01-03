@@ -68,6 +68,7 @@ public:
         :magic(0x66),
         version(0x0001),
         msg_type(type),
+        msg_id(0),
         body_type(msgbody_type),
         body_len(0)
     {

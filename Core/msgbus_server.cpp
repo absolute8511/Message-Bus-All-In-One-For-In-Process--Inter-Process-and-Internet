@@ -399,7 +399,7 @@ size_t server_onRead(TcpSockSmartPtr sp_tcp, const char* pdata, size_t size)
         size -= needlen;
         pdata += head.body_len;
 
-        //g_log.Log(lv_debug, "receive head , msg_type:%u, body_type:%#x.",head.msg_type, head.body_type);
+        //g_log.Log(lv_debug, "receive head msgid:%u , msg_type:%u, body_type:%#x.", head.msg_id, head.msg_type, head.body_type);
         threadpool::queue_work_task(boost::bind(process_data_from_client, sp_tcp, head, bodybuffer), 0);
         //process_data_from_client(sp_tcp, head, bodybuffer);
     }
@@ -750,12 +750,12 @@ void process_getclient_req(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, b
     MsgBusGetClientReq req;
     req.UnPackBody(bodybuffer.get());
     string dest_name(req.dest_name);
-    g_log.Log(lv_debug, "receive get client info request, client name:%s.", dest_name.c_str());
+    //g_log.Log(lv_debug, "receive get client info request, client name:%s.", dest_name.c_str());
 
     MsgBusGetClientRsp rsp;
     rsp.msg_id = head.msg_id;
     strncpy(rsp.dest_name, req.dest_name, MAX_SERVICE_NAME);
-    g_log.Log(lv_debug, "rsp client name:%s.", rsp.dest_name);
+    //g_log.Log(lv_debug, "rsp client name:%s.", rsp.dest_name);
 
     ClientHostContainer::value_type host;
     core::common::locker_guard guard(g_activeclients_locker);
@@ -820,7 +820,7 @@ void onQueryServicesReq(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head, PBQu
     int size = rsp.ByteSize();
     boost::shared_array<char> pbdata(new char[size]);
     rsp.SerializeToArray(pbdata.get(), size);
-    g_log.Log(lv_debug, "rsp query services : %s", std::string(pbdata.get(), size).c_str());
+    g_log.Log(lv_debug, "msgid:%u, rsp query services : %s", head.msg_id, std::string(pbdata.get(), size).c_str());
     packpb.pbdata_len = size; 
     packpb.SetVarData(&pbtype[0], pbdata.get());
 

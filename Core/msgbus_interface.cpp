@@ -680,9 +680,9 @@ bool NetMsgBusGetData(const std::string& dest_ip, unsigned short dest_port, cons
     return msgbus_sendmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata, rsp_data, timeout_sec);
 }
 
-int  NetMsgBusQueryServices(const std::string& match_str)
+int  NetMsgBusQueryServices(const std::string& match_str, std::string& rsp)
 {
-    return msgbus_query_available_services(match_str);
+    return msgbus_query_available_services(match_str, rsp);
 }
 
 void printAllMsgHandler(const std::string& msgid)

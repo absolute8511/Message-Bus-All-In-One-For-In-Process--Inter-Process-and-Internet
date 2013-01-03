@@ -146,7 +146,7 @@ namespace NetMsgBus
     boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& dest_ip,
         unsigned short dest_port, const std::string& msgid, MsgBusParam param, NetFuture::futureCB callback = NULL);
     // query all available services that are registered on the net message bus server
-    int  NetMsgBusQueryServices(const std::string& match_str);
+    int  NetMsgBusQueryServices(const std::string& match_str, std::string& rsp);
  
     void printAllMsgHandler(const std::string& msgid);
 }

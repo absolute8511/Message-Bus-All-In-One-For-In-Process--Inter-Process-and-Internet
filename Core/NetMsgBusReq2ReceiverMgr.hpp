@@ -82,8 +82,7 @@ protected:
     Req2ReceiverMgr()
         :m_server_connmgr(NULL),
         m_req2receiver_running(false),
-        m_req2receiver_terminate(false),
-        future_sessionid_(0)
+        m_req2receiver_terminate(false)
     {
     }
 public:
@@ -132,7 +131,7 @@ public:
         task.timeout = timeout;
         task.dest_client.host_ip = dest_ip;
         task.dest_client.host_port = dest_port;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future();
         task.future_id = future.first;
         // sync sendmsg will not retry to update client info if failed to send message.
         return ProcessReqToReceiver(task, rsp_content);
@@ -151,7 +150,7 @@ public:
         // 如果是同步的，那么不再向服务器请求客户端信息，直接返回失败
         task.retry = false;
         task.timeout = timeout;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future();
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future();
         task.future_id = future.first;
         // sync sendmsg will not retry to update client info if failed to send message.
         return ProcessReqToReceiver(task, rsp_content);
@@ -176,7 +175,7 @@ public:
         rtask.retry = false;
         rtask.dest_client.host_ip = dest_ip;
         rtask.dest_client.host_port = dest_port;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future(callback);
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future(callback);
         rtask.future_id = future.first;
         if(!QueueReqTaskToReceiver(rtask))
             return boost::shared_ptr<NetFuture>();
@@ -196,7 +195,7 @@ public:
         rtask.data = data;
         rtask.data_len = data_len;
         rtask.retry = true;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = safe_insert_future(callback);
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future(callback);
         rtask.future_id = future.first;
         if(!QueueReqTaskToReceiver(rtask))
             return boost::shared_ptr<NetFuture>();
@@ -225,7 +224,7 @@ public:
 
     void Stop()
     {
-        safe_clear_bad_future();
+        future_mgr_.safe_clear_bad_future();
         m_req2receiver_terminate = true;
         {
             core::common::locker_guard guard(m_reqtoreceiver_locker);
@@ -291,7 +290,7 @@ private:
             while(taskit != pendingtasks.end())
             {
                 taskit->retry = false;
-                safe_remove_future(taskit->future_id);
+                future_mgr_.safe_remove_future(taskit->future_id);
                 ++taskit;
             }
         }
@@ -327,21 +326,8 @@ private:
             needlen += data_len;
             if(size < needlen)
                 return readedlen;
-            boost::shared_ptr<NetFuture> ready_sendmsg_rsp;
-            {
-                //g_log.Log(lv_debug, "receiver future data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), future_sid, sp_tcp->GetFD());
-                core::common::locker_guard guard(m_rsp_sendmsg_lock);
-                boost::unordered_map<uint32_t, boost::shared_ptr<NetFuture> >::iterator future_it = m_sendmsg_rsp_container.find(future_sid);
-                if(future_it == m_sendmsg_rsp_container.end())
-                {
-                    g_log.Log(lv_warn, "received a non-exist future_sid rsp, sid:%u ", future_sid);
-                }
-                else
-                {
-                    ready_sendmsg_rsp = future_it->second;
-                    m_sendmsg_rsp_container.erase(future_it);
-                }
-            }
+            boost::shared_ptr<NetFuture> ready_sendmsg_rsp = future_mgr_.safe_get_future(future_sid, true);
+            //g_log.Log(lv_debug, "receiver future data returned to client:%lld, sid:%u, fd:%d\n", (int64_t)core::utility::GetTickCount(), future_sid, sp_tcp->GetFD());
             if(ready_sendmsg_rsp)
             {
                 ready_sendmsg_rsp->set_result(pdata, data_len);
@@ -362,7 +348,7 @@ private:
         //printf("req2receiver tcp disconnected.\n");
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
-        safe_clear_bad_future();
+        future_mgr_.safe_clear_bad_future();
     }
     void Req2Receiver_onError(TcpSockSmartPtr sp_tcp)
     {
@@ -370,7 +356,7 @@ private:
         LOG(g_log, lv_error, "client %d , error happened, time:%lld.\n", sp_tcp->GetFD(), (int64_t)utility::GetTickCount());
         m_sendmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
         m_postmsg_client_conn_pool.RemoveTcpSock(sp_tcp);
-        safe_clear_bad_future();
+        future_mgr_.safe_clear_bad_future();
     }
     bool IdentiySelfToReceiver(TcpSockSmartPtr sp_tcp)
     {
@@ -397,10 +383,10 @@ private:
         if(task.sync)
         {
             syncflag = 1;
-            cur_sendmsg_rsp = safe_get_future(waiting_futureid);
+            cur_sendmsg_rsp = future_mgr_.safe_get_future(waiting_futureid);
         }
-        g_log.Log(lv_debug, "begin send data to receiver:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(),
-            task.future_id, 9 + task.data_len, sp_tcp->GetFD());
+        //g_log.Log(lv_debug, "begin send data to receiver:%lld, sid:%u, datalen:%d, fd:%d", (int64_t)core::utility::GetTickCount(),
+        //    task.future_id, 9 + task.data_len, sp_tcp->GetFD());
         uint32_t write_len = sizeof(syncflag) + sizeof(waiting_futureid) + sizeof(task.data_len) + task.data_len;
         boost::shared_array<char> writedata(new char[write_len]);
         memcpy(writedata.get(), &syncflag, sizeof(syncflag));
@@ -413,7 +399,7 @@ private:
         {
             LOG(g_log, lv_warn, "send msg to other client failed.");
             rsp_content = "send data failed.";
-            safe_remove_future(waiting_futureid);
+            future_mgr_.safe_remove_future(waiting_futureid);
             return false;
         }
         // 如果要求同步发送， 则等待
@@ -461,7 +447,7 @@ private:
                 else
                 {
                     LOG(g_log, lv_warn, "error send data to client, no cached client info.");
-                    safe_remove_future(task.future_id);
+                    future_mgr_.safe_remove_future(task.future_id);
                     return false;
                 }
                 return true;
@@ -515,7 +501,7 @@ private:
                 {
                     perror("error connect to receiver client.\n");
                     PostMsg("netmsgbus.client.connectreceiver.failed", CustomType2Param(task.clientname));
-                    safe_remove_future(task.future_id);
+                    future_mgr_.safe_remove_future(task.future_id);
                     return false;
                 }
                 return true;
@@ -523,7 +509,7 @@ private:
             newtcp = pclient_conn_pool->GetTcpSockByDestHost(destclient.host_ip, destclient.host_port);
             if(!newtcp)
             {
-                safe_remove_future(task.future_id);
+                future_mgr_.safe_remove_future(task.future_id);
                 return false;
             }
         }
@@ -531,7 +517,7 @@ private:
         {
             return true;
         }
-        safe_remove_future(task.future_id);
+        future_mgr_.safe_remove_future(task.future_id);
         return false;
     }
 
@@ -616,53 +602,6 @@ private:
         m_cached_client_info.erase(clientname);
     }
 
-    std::pair<uint32_t, boost::shared_ptr<NetFuture> > safe_insert_future(NetFuture::futureCB callback = NULL)
-    {
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        ++future_sessionid_;
-        if(future_sessionid_ == 0)
-            ++future_sessionid_;
-        uint32_t waiting_futureid = future_sessionid_;
-        std::pair<FutureRspContainerT::iterator, bool> inserted = m_sendmsg_rsp_container.insert(
-            std::make_pair(waiting_futureid, boost::shared_ptr<NetFuture>(new NetFuture(callback))));
-        assert(inserted.second);
-        return std::make_pair(waiting_futureid, inserted.first->second);
-    }
-
-    boost::shared_ptr<NetFuture> safe_get_future(uint32_t future_sid)
-    {
-        boost::shared_ptr<NetFuture> future;
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        FutureRspContainerT::iterator future_it = m_sendmsg_rsp_container.find(future_sid);
-        if(future_it != m_sendmsg_rsp_container.end())
-        {
-            future = future_it->second;
-        }
-        return future;
-    }
-    void safe_remove_future(uint32_t future_sid)
-    {
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        m_sendmsg_rsp_container.erase(future_sid);
-    }
-
-    void safe_clear_bad_future()
-    {
-        core::common::locker_guard guard(m_rsp_sendmsg_lock);
-        FutureRspContainerT::iterator future_it = m_sendmsg_rsp_container.begin();
-        while(future_it != m_sendmsg_rsp_container.end())
-        {
-            if(future_it->second && future_it->second->is_bad())
-            {
-                future_it = m_sendmsg_rsp_container.erase(future_it);
-            }
-            else
-            {
-                ++future_it;
-            }
-        }
-    }
-
     pthread_t m_req2receiver_tid;
 
     typedef std::deque< Req2ReceiverTask > Req2ReceiverTaskContainerT;
@@ -680,14 +619,11 @@ private:
     core::common::locker    m_cached_receiver_locker;
     core::common::locker    m_waitingtask_locker;
 
-    core::common::locker    m_rsp_sendmsg_lock;
-    typedef boost::unordered_map< uint32_t, boost::shared_ptr<NetFuture> > FutureRspContainerT;
-    FutureRspContainerT m_sendmsg_rsp_container;
+    FutureMgr future_mgr_;
 
     ServerConnMgr* m_server_connmgr;
     volatile bool m_req2receiver_running;
     volatile bool m_req2receiver_terminate;
-    uint32_t  future_sessionid_;
     TcpClientPool  m_sendmsg_client_conn_pool;
     TcpClientPool  m_postmsg_client_conn_pool;
 };

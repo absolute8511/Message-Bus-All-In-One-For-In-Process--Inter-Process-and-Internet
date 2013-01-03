@@ -97,9 +97,9 @@ bool msgbus_req_receiver_info(const std::string& clientname)
     return s_server_connmgr.ReqReceiverInfo(clientname);
 }
 
-bool msgbus_query_available_services(const std::string& match_str)
+bool msgbus_query_available_services(const std::string& match_str, std::string& rsp)
 {
-    return s_server_connmgr.QueryAvailableServices(match_str);
+    return s_server_connmgr.QueryAvailableServices(match_str, rsp);
 }
 
 //void msgbus_disconnect_receiver(const std::string& name)

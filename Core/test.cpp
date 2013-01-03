@@ -488,7 +488,10 @@ void testremotemsgbus_without_server()
             thandlerobj->AddHandler("rsp_msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus3, 0);
             clientport = 9102;
         }
-        NetMsgBusRegReceiver(service_name, "", clientport);
+        if(0 != NetMsgBusRegReceiver(service_name, "", clientport))
+        {
+            LOG(g_log, lv_debug, "failed to register service, running without msgbus center server");
+        }
     }
     else if(inputflag == 's')
     {
@@ -651,8 +654,11 @@ void testremotemsgbus()
             printf("register receiver client error.\n");
             return;
         }
-        sleep(1);
-        NetMsgBusQueryServices("");
+        std::string rsp;
+        if(NetMsgBusQueryServices("", rsp))
+        {
+            LOG(g_log, lv_info, "query available services is : %s.", rsp.c_str());
+        }
     }
     else if(inputflag == 's')
     {
@@ -664,8 +670,13 @@ void testremotemsgbus()
             printf("register only msgbus server connection client error.\n");
             return;
         }
-        sleep(1);
-        NetMsgBusQueryServices("");
+
+        std::string rsp;
+        if(NetMsgBusQueryServices("", rsp))
+        {
+            LOG(g_log, lv_info, "query available services is : %s.", rsp.c_str());
+        }
+
         printf("press any key other than 'q' to start send test message to netmsgbus.\n");
         core::XParam xp;
         xp.put_Int("testkey", 100);
