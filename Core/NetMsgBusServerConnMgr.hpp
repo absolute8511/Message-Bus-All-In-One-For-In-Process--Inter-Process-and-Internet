@@ -147,6 +147,7 @@ public:
     }
     void onServerTimeout(TcpSockSmartPtr sp_tcp)
     {
+        g_log.Log(lv_debug, "sending heart to msgbus server for timeout.");
         MsgBusConfirmAliveReq req;
         req.alive_flag = 0;
         boost::shared_array<char> buf(new char[req.Size()]);

@@ -104,6 +104,7 @@ void TcpSock::RenewTimeout()
     {
         assert(m_evloop->IsInLoopThread());
         m_timeout_ms = core::utility::GetTickCount() + m_timeout_renew;
+        need_renew_timeout_ = false;
     }
 }
 
@@ -126,6 +127,8 @@ void TcpSock::UpdateTimeout()
 {
     if(m_is_timeout_need)
     {
+        if (need_renew_timeout_)
+            RenewTimeout();
         //g_log.Log(lv_debug, "update timeout : fd-%d", m_fd);
         if(core::utility::GetTickCount() > m_timeout_ms)
         {
@@ -314,6 +317,7 @@ bool TcpSock::DoSend()
                     // fd is not available, so here should find the next event.
                 }
             }
+            need_renew_timeout_ = true;
         }
         else
         {

@@ -472,6 +472,7 @@ bool server_onSend(TcpSockSmartPtr sp_tcp)
 
 void server_onTimeout(TcpSockSmartPtr sp_tcp)
 {
+    LOG(g_log, lv_warn, "disconnect client for timeout. %d", sp_tcp->GetFD());
     server_onClose(sp_tcp);
     sp_tcp->Close();
 }
