@@ -611,7 +611,6 @@ void testremotemsgbus()
         return;
     }
 
-    NetMsgBusQueryServices("");
 
     //bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
     //assert(ret);
@@ -652,6 +651,8 @@ void testremotemsgbus()
             printf("register receiver client error.\n");
             return;
         }
+        sleep(1);
+        NetMsgBusQueryServices("");
     }
     else if(inputflag == 's')
     {
@@ -663,6 +664,8 @@ void testremotemsgbus()
             printf("register only msgbus server connection client error.\n");
             return;
         }
+        sleep(1);
+        NetMsgBusQueryServices("");
         printf("press any key other than 'q' to start send test message to netmsgbus.\n");
         core::XParam xp;
         xp.put_Int("testkey", 100);

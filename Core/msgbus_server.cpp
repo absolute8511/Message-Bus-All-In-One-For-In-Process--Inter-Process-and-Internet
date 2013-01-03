@@ -208,6 +208,11 @@ bool msgbus_select_best_client(const ClientHostContainer& container, ClientHost&
     }
 }
 
+bool check_register_client(TcpSockSmartPtr sp_tcp)
+{
+    return tcp_services_map.find(sp_tcp->GetFD()) != tcp_services_map.end();
+}
+
 void unregister_client_from_service(const std::string& service_name, const ClientHost& host)
 {
     core::common::locker_guard guard(g_activeclients_locker);
@@ -406,6 +411,13 @@ void process_data_from_client(TcpSockSmartPtr sp_tcp, const MsgBusPackHead& head
     //g_log.Log(lv_debug, "server process data from client in thread : %lu.", (unsigned long)pthread_self());
     if( head.msg_type == 0 )
     {
+        bool check_reg = check_register_client(sp_tcp);
+        if ((head.body_type != REQ_REGISTER) && (head.body_type != REQ_CONFIRM_ALIVE) && !check_reg)
+        {
+            LOG(g_log, lv_warn, "The client %d has not been registered, ignore any other request except register and heart confirm. req:%d.",
+                sp_tcp->GetFD(), head.body_type);
+            return;
+        }
         // request msg
         switch(head.body_type)
         {
@@ -580,6 +592,8 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
         }
         else
         {
+            // TODO:if port == 0, check the service unique, only one can be register.!!
+            bool can_reg = true;
             if(host.port() != 0)
             {
                 // port is zero just mean not a service provider, just connected for send/recv data 
@@ -588,11 +602,26 @@ void process_register_req(TcpSockSmartPtr sp_tcp, boost::shared_array<char> body
                 container.push_back(host);
                 available_services[service_name] = container;
             }
-            // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
-            active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
-            tcp_services_map[sp_tcp->GetFD()] = host;
-            g_log.Log(lv_debug, "new register service:%s, server host is %s:%d.", service_name.c_str(),
-                host.ip().c_str(), host.port());
+            else
+            {
+                if (active_clients.find(service_name) != active_clients.end())
+                {
+                    rsp.ret_code = 1;
+                    errmsg = string("Register without service port can only be registered once.");
+                    rsp.err_msg_len = errmsg.size() + 1;
+                    can_reg = false;
+                    g_log.Log(lv_debug, "register without service port can only be registered once, service:%s, server host is %s:%d.", service_name.c_str(),
+                        host.ip().c_str(), host.port());
+                }
+            }
+            if (can_reg)
+            {
+                // 存储当前服务对应的活动连接，以便其他地方直接拿到该连接符来发送数据
+                active_clients[service_name][(long)sp_tcp.get()] = sp_tcp;
+                tcp_services_map[sp_tcp->GetFD()] = host;
+                g_log.Log(lv_debug, "new register service:%s, server host is %s:%d.", service_name.c_str(),
+                    host.ip().c_str(), host.port());
+            }
         }
     }
     assert(rsp.err_msg_len);

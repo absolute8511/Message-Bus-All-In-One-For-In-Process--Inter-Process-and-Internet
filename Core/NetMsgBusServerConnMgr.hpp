@@ -229,11 +229,14 @@ public:
             m_isreceiver_registered = true;
             m_receiver_name = std::string(reg_rsp.service_name);
             PostMsg("netmsgbus.server.regreceiver.success", rspdata, MAX_SERVICE_NAME);
+            LOG(g_log, lv_debug, "register service success. %s.", reg_rsp.service_name);
         }
         else
         {
             m_isreceiver_registered = false;
             PostMsg("netmsgbus.server.regreceiver.failed", rspdata, MAX_SERVICE_NAME);
+            LOG(g_log, lv_info, "register service failed. %s.", reg_rsp.service_name);
+            m_server_tcp->DisAllowSend();
         }
     }
     void HandleRspGetClient(const std::string& rsp_body)
@@ -249,7 +252,7 @@ public:
         }
         else
         {
-            g_log.Log(lv_debug, "msgbus server return error while get client info, ret_code: %d.", rsp.ret_code);
+            LOG(g_log, lv_debug, "msgbus server return error while get client info, ret_code: %d.", rsp.ret_code);
         }
     }
     void HandleRspSendMsg(const std::string& rsp_body)
@@ -261,7 +264,7 @@ public:
         }
         else
         {
-            g_log.Log(lv_debug, "send msg by server error: %d, errmsg: %s.", rsp.ret_code, std::string(rsp.GetErrMsg()).c_str());
+            LOG(g_log, lv_debug, "send msg by server error: %d, errmsg: %s.", rsp.ret_code, std::string(rsp.GetErrMsg()).c_str());
         }
     }
     void HandleReqSendMsg(const std::string& rsp_body)
@@ -270,21 +273,22 @@ public:
         req.UnPackBody(rsp_body.data(), rsp_body.size());
         if(!FilterMgr::FilterBySender(req.from_name))
         {
-            g_log.Log(lv_debug, "filter by sender: %s while got message from server relay.", req.from_name);
+            LOG(g_log, lv_debug, "filter by sender: %s while got message from server relay.", req.from_name);
             return;
         }
         std::string msg_str(req.GetMsgContent(), req.msg_len);
-        g_log.Log(lv_debug, "got message from server relay. from: %s, content:%s, msgid:%d", req.from_name, msg_str.c_str(), req.msg_id);
+        LOG(g_log, lv_debug, "got message from server relay. from: %s, content:%s, msgid:%d", req.from_name, msg_str.c_str(), req.msg_id);
         NetMsgBusToLocalMsgBus(msg_str);
     }
     void HandleRspUnRegister(const std::string& rsp_body)
     {
         // unregister from msgbus server, receiver should shutdown, but we can still sendmsg.
         //s_server_connecting = false;
+        m_server_tcp->DisAllowSend();
     }
     void HandleRspPBBody(const std::string& rsp_body)
     {
-        g_log.Log(lv_debug, "query services response:%s", rsp_body.c_str());
+        LOG(g_log, lv_debug, "query services response:%s", rsp_body.c_str());
         MsgBusPackPBType pbpack;
 
         pbpack.UnPackBody(rsp_body.data(), rsp_body.size());
@@ -297,7 +301,7 @@ public:
         }
         else
         {
-            g_log.Log(lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
+            LOG(g_log, lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
         }
 
     }
@@ -314,13 +318,13 @@ public:
         }
         
         //PostMsg("netmsgbus.server.queryservice.rsp", PBType2Param(*pbrsp));
-        //g_log.Log(lv_debug, "all available services:%s", service_name.c_str());
+        //LOG(g_log, lv_debug, "all available services:%s", service_name.c_str());
         printf("all available services:%s\n", service_name.c_str());
     }
 
     void HandleUnknown(const std::string& rsp_body)
     {
-        g_log.Log(lv_warn, "receive a unknown rsp from msgbus server.");
+        LOG(g_log, lv_warn, "receive a unknown rsp from msgbus server.");
     }
 
     // 注册本地的客户端接收消息的地址
@@ -423,10 +427,9 @@ public:
     {
         if(!m_server_connecting)
         {
-            g_log.Log(lv_debug, "server not connecting while req receiver info.");
+            LOG(g_log, lv_debug, "server not connecting while req receiver info.");
             return false;
         }
-        //printf("request client name :%s\n", clientname.c_str());
         MsgBusGetClientReq get_client_req;
         assert(clientname.size() < MAX_SERVICE_NAME);
         strncpy(get_client_req.dest_name, clientname.c_str(), MAX_SERVICE_NAME);
@@ -443,7 +446,7 @@ public:
     {
         if(!m_server_connecting)
         {
-            g_log.Log(lv_debug, "server not connecting while req receiver info.");
+            LOG(g_log, lv_debug, "server not connecting while req receiver info.");
             return false;
         }
         //printf("request client name :%s\n", clientname.c_str());
