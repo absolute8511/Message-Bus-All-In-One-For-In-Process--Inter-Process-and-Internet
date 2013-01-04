@@ -92,9 +92,9 @@ boost::shared_ptr<NetFuture> msgbus_postmsg_direct_to_client(const std::string& 
     return sp_req2receiver_mgr->PostMsgDirectToClient(dest_ip, dest_port, data_len, data, callback);
 }
 
-bool msgbus_req_receiver_info(const std::string& clientname)
+bool msgbus_req_receiver_info(const std::string& clientname, std::string& ip, unsigned short int& port)
 {
-    return s_server_connmgr.ReqReceiverInfo(clientname);
+    return s_server_connmgr.ReqReceiverInfo(clientname, ip, port);
 }
 
 bool msgbus_query_available_services(const std::string& match_str, std::string& rsp)

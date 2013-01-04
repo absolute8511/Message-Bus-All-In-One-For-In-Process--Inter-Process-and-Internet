@@ -28,6 +28,8 @@ using std::string;
 using namespace core::net;
 using namespace core;
 
+#define SERVER_CALL_TIMEOUT 5
+
 namespace NetMsgBus 
 {
 
@@ -256,7 +258,7 @@ public:
         rsp.UnPackBody(rsp_body.data());
         boost::shared_array<char> rspdata(new char[rsp_body.size()]);
         memcpy(rspdata.get(), rsp_body.data(), rsp_body.size());
-        PostMsg("netmsgbus.server.getclient", rspdata, rsp_body.size());
+        //PostMsg("netmsgbus.server.getclient", rspdata, rsp_body.size());
         if(rsp.ret_code == 0)
         {
             assert(rsp_body.size());
@@ -265,6 +267,11 @@ public:
         else
         {
             LOG(g_log, lv_debug, "msgbus server return error while get client info, ret_code: %d.", rsp.ret_code);
+        }
+        boost::shared_ptr<NetFuture> ready_sendmsg_rsp = future_mgr_.safe_get_future(msg_id, true);
+        if(ready_sendmsg_rsp)
+        {
+            ready_sendmsg_rsp->set_result(rsp_body);
         }
     }
     void HandleRspSendMsg(uint32_t msg_id, const std::string& rsp_body)
@@ -323,7 +330,6 @@ public:
         {
             LOG(g_log, lv_warn, "unknown pbtype:%s of protocol buffer data.", pbtype.c_str());
         }
-
     }
 
     void HandleQueryServicesRsp(uint32_t msg_id, PBQueryServicesRsp* pbrsp)
@@ -384,7 +390,7 @@ public:
             if (!ret)
                 return false;
             std::string rsp;
-            ret = future.second->get(5, rsp);
+            ret = future.second->get(SERVER_CALL_TIMEOUT, rsp);
             if (!ret || future.second->has_err() || rsp.empty())
             {
                 LOG(g_log, lv_warn, "register receiver failed. err:%s", rsp.c_str());
@@ -460,7 +466,7 @@ public:
             if (!ret)
                 return false;
             std::string rsp;
-            ret = future.second->get(5, rsp);
+            ret = future.second->get(SERVER_CALL_TIMEOUT, rsp);
             if (!ret || future.second->has_err())
             {
                 LOG(g_log, lv_warn, "sendmsg use server relay failed. msgid:%u, err:%s.", future.first, rsp.c_str());
@@ -470,23 +476,18 @@ public:
         }
         return false;
     }
-    bool ReqReceiverInfo(const std::string& clientname)
+    bool ReqReceiverInfo(const std::string& clientname, NetFuture::futureCB cb)
     {
-        if(!m_server_connecting)
-        {
-            LOG(g_log, lv_debug, "server not connecting while req receiver info.");
+        if (cb == NULL)
             return false;
-        }
-        MsgBusGetClientReq get_client_req;
-        assert(clientname.size() < MAX_SERVICE_NAME);
-        strncpy(get_client_req.dest_name, clientname.c_str(), MAX_SERVICE_NAME);
-        get_client_req.dest_name[clientname.size()] = '\0';
-        boost::shared_array<char> req_data(new char[get_client_req.Size()]);
-        get_client_req.PackData(req_data.get());
-        assert(m_server_tcp);
-        if(m_server_tcp)
-            return m_server_tcp->SendData(req_data.get(), get_client_req.Size());
-        return false;
+        std::string ip;
+        unsigned short int port;
+        return ReqReceiverInfo(clientname, ip, port, cb);
+    }
+
+    bool ReqReceiverInfo(const std::string& clientname, std::string& ip, unsigned short int& port)
+    {
+        return ReqReceiverInfo(clientname, ip, port, NULL);
     }
 
     bool QueryAvailableServices(const std::string& match_str, std::string& rsp)
@@ -520,7 +521,7 @@ public:
             bool ret = m_server_tcp->SendData(req_data.get(), services_query.Size());
             if (!ret)
                 return false;
-            ret = future.second->get(5, rsp);
+            ret = future.second->get(SERVER_CALL_TIMEOUT, rsp);
             if (!ret || future.second->has_err())
             {
                 LOG(g_log, lv_warn, "query available services failed.msgid:%d, err:%s", future.first, rsp.c_str());
@@ -536,6 +537,54 @@ private:
     {
         boost::shared_ptr<PBHandlerT<T> > pbh(new PBHandlerT<T>(cb));
         m_pb_handlers[T::descriptor()->full_name()] = pbh;
+    }
+    bool ReqReceiverInfo(const std::string& clientname, std::string& ip, unsigned short int& port, NetFuture::futureCB cb)
+    {
+        if(!m_server_connecting)
+        {
+            LOG(g_log, lv_debug, "server not connecting while req receiver info.");
+            return false;
+        }
+        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future(cb);
+        MsgBusGetClientReq get_client_req;
+        get_client_req.msg_id = future.first;
+
+        assert(clientname.size() < MAX_SERVICE_NAME);
+        strncpy(get_client_req.dest_name, clientname.c_str(), MAX_SERVICE_NAME);
+        get_client_req.dest_name[clientname.size()] = '\0';
+        boost::shared_array<char> req_data(new char[get_client_req.Size()]);
+        get_client_req.PackData(req_data.get());
+        assert(m_server_tcp);
+        if(m_server_tcp)
+        {
+            bool ret = m_server_tcp->SendData(req_data.get(), get_client_req.Size());
+            if (!ret)
+                return false;
+            if (cb == NULL)
+            {
+                std::string rspdata;
+                ret = future.second->get(SERVER_CALL_TIMEOUT, rspdata);
+                if (!ret || future.second->has_err() || rspdata.empty())
+                {
+                    LOG(g_log, lv_warn, "req receiver info failed.msgid:%d, err:%s", future.first, rspdata.c_str());
+                    return false;
+                }
+                MsgBusGetClientRsp rsp;
+                rsp.UnPackBody(rspdata.data(), rspdata.size());
+                std::string clientname(rsp.dest_name);
+                if(rsp.ret_code == 0)
+                {
+                    ip = rsp.dest_host.ip();
+                    port = rsp.dest_host.port();
+                    //LOG(g_log, lv_debug, "get client info returned. ret name : %s, ip:port : %s:%d", clientname.c_str(), ip.c_str(), port); 
+                    return true;
+                }
+                LOG(g_log, lv_debug, "get client info returned error. ret name : %s, retcode: %d", clientname.c_str(), rsp.ret_code); 
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     //EventLoopPool m_evpool;

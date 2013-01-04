@@ -640,9 +640,9 @@ bool NetMsgBusSendMsg(const std::string& dest_ip, unsigned short dest_port, cons
     return msgbus_postmsg_direct_to_client(dest_ip, dest_port, netmsg_len, netmsg_param.paramdata) != NULL;
 }
 
-bool NetMsgBusQueryHostInfo(const std::string& clientname)
+bool NetMsgBusQueryHostInfo(const std::string& clientname, std::string& ip, unsigned short int& port)
 {
-    return msgbus_req_receiver_info(clientname);
+    return msgbus_req_receiver_info(clientname, ip, port);
 }
 
 boost::shared_ptr<NetFuture> NetMsgBusAsyncGetData(const std::string& clientname, const std::string& msgid,

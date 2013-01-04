@@ -14,7 +14,7 @@ bool msgbus_register_client_receiver(const std::string& clientip, unsigned short
 // 更新本地消息接收者的负载状态以便服务器动态选择客户端
 bool msgbus_update_receiver_busystate(const std::string& clientname, kServerBusyState busy_state);
 // 向服务器请求某个命名的消息接收者主机信息，然后缓存此客户端信息
-bool msgbus_req_receiver_info(const std::string& clientname);
+bool msgbus_req_receiver_info(const std::string& clientname, std::string& ip, unsigned short int& port);
 // 通过服务器中转发送消息，支持以前缀的方式匹配一组客户端名称，然后进行组广播消息
 bool msgbus_postmsg_use_server_relay(const std::string& clientname, uint32_t data_len, boost::shared_array<char> data);
 // post message to all registed client in the netmsgbus.

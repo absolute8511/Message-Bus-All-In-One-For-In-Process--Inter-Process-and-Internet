@@ -689,8 +689,13 @@ void testremotemsgbus()
         MsgBusParam param = CustomType2Param(xp);
         uint32_t sendcounter = 0;
 
-        
-        NetMsgBusQueryHostInfo("test.receiverclient_A");
+        std::string ip;
+        unsigned short int port = 0;
+        if(!NetMsgBusQueryHostInfo("test.receiverclient_A", ip, port))
+        {
+            LOG(g_log, lv_warn, "query host info failed.");
+        }
+        LOG(g_log, lv_debug, "host info for test.receiverclient_A is %s:%d", ip.c_str(), port);
         sleep(3);
         //threadpool::task_type t = boost::bind(testSyncGetData);
         //for(int cocurrent = 0; cocurrent < 100; ++cocurrent)

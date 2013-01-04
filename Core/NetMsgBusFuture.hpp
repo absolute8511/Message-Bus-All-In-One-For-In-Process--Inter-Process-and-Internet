@@ -22,12 +22,14 @@ public:
     typedef boost::function<void(const NetFuture&)> futureCB;
     void set_result(const char* pdata, size_t len)
     {
-        core::common::locker_guard guard(wait_lock_);
-        rsp_content_.assign(pdata, pdata + len);
-        ready_ = true;
+        {
+            core::common::locker_guard guard(wait_lock_);
+            rsp_content_.assign(pdata, pdata + len);
+            ready_ = true;
+            wait_cond_.notify_all();
+        }
         if (callback_)
             callback_(*this);
-        wait_cond_.notify_all();
     }
 
     void set_result(const std::string& result)

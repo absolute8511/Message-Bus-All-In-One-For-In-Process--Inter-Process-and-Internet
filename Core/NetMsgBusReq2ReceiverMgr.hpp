@@ -142,18 +142,22 @@ public:
     {
         if(clientname == "" || !m_req2receiver_running )
             return false;
-        Req2ReceiverTask task;
-        task.clientname = clientname;
-        task.data_len = data_len;
-        task.data = data;
-        task.sync = true;
-        // 如果是同步的，那么不再向服务器请求客户端信息，直接返回失败
-        task.retry = false;
-        task.timeout = timeout;
-        std::pair<uint32_t, boost::shared_ptr<NetFuture> > future = future_mgr_.safe_insert_future();
-        task.future_id = future.first;
+        LocalHostInfo destclient;
+        bool cache_exist = safe_get_cached_host_info(clientname, destclient);
+        if(!cache_exist)
+        {
+            if(m_server_connmgr && m_server_connmgr->ReqReceiverInfo(clientname,
+                    destclient.host_ip, destclient.host_port))
+            {
+                //
+                core::common::locker_guard guard(m_cached_receiver_locker);
+                m_cached_client_info[clientname] = destclient;
+            }
+            else
+                return false;
+        }
         // sync sendmsg will not retry to update client info if failed to send message.
-        return ProcessReqToReceiver(task, rsp_content);
+        return SendMsgDirectToClient(destclient.host_ip, destclient.host_port, data_len, data, rsp_content, timeout);
     }
 
     boost::shared_ptr<NetFuture> PostMsgDirectToClient(const std::string& dest_ip, unsigned short dest_port,
@@ -214,7 +218,7 @@ public:
             m_req2receiver_tid = 0;
             return false;
         }
-        AddHandler("netmsgbus.server.getclient", &Req2ReceiverMgr::HandleRspGetClient, 0);
+        //AddHandler("netmsgbus.server.getclient", &Req2ReceiverMgr::HandleRspGetClient, 0);
         while(!m_req2receiver_running)
         {
             usleep(100);
@@ -239,10 +243,21 @@ public:
     }
 
 private:
-    bool HandleRspGetClient(const std::string& msgid, MsgBusParam& msgparam, bool& filter )
+    void HandleRspGetClient(const NetFuture& futuredata)
     {
         MsgBusGetClientRsp rsp;
-        rsp.UnPackBody(msgparam.paramdata.get());
+        std::string rspdata;
+        if(!futuredata.get(rspdata) || futuredata.has_err())
+            return;
+        try
+        {
+            rsp.UnPackBody(rspdata.data(), rspdata.size());
+        }
+        catch(...)
+        {
+            LOG(g_log, lv_warn, "unpack get client rsp error.");
+            return;
+        }
         std::string clientname(rsp.dest_name);
         // remove all the pending task belong the rsp client name.
         Req2ReceiverTaskContainerT pendingtasks;
@@ -258,7 +273,7 @@ private:
             }
             else
             {
-                LOG(g_log, lv_info, "pending task %zu, but no pending task in client %s.\n", m_wait2send_task_container.size(), clientname.c_str());
+                LOG(g_log, lv_info, "pending task %zu, but no pending task in client %s.", m_wait2send_task_container.size(), clientname.c_str());
             }
         }
         Req2ReceiverTaskContainerT::iterator taskit = pendingtasks.begin();
@@ -268,9 +283,8 @@ private:
             LocalHostInfo hostinfo;
             hostinfo.host_ip = rsp.dest_host.ip();
             hostinfo.host_port = rsp.dest_host.port();
-            LOG(g_log, lv_debug, "get client info returned. ret name : %s(%u), ip:port : %s:%d\n", clientname.c_str(), clientname.size(),
-              hostinfo.host_ip.c_str(), 
-              hostinfo.host_port);
+            LOG(g_log, lv_debug, "get client info returned. ret name : %s, ip:port : %s:%d", clientname.c_str(),
+              hostinfo.host_ip.c_str(), hostinfo.host_port);
             {
                 core::common::locker_guard guard(m_cached_receiver_locker);
                 m_cached_client_info[clientname] = hostinfo;
@@ -285,7 +299,7 @@ private:
         }
         else
         {
-            PostMsg("netmsgbus.server.getclient.error", CustomType2Param(std::string(rsp.dest_name)));
+            //PostMsg("netmsgbus.server.getclient.error", CustomType2Param(std::string(rsp.dest_name)));
             LOG(g_log, lv_warn, "server return error while query client info, ret_code: %d.", rsp.ret_code);
             while(taskit != pendingtasks.end())
             {
@@ -294,7 +308,6 @@ private:
                 ++taskit;
             }
         }
-        return true;
     }
 
     bool QueueReqTaskToReceiver(const Req2ReceiverTask& req_task)
@@ -442,7 +455,7 @@ private:
                 {
                     safe_queue_waiting_task(task);
                     if(m_server_connmgr)
-                        m_server_connmgr->ReqReceiverInfo(task.clientname);
+                        m_server_connmgr->ReqReceiverInfo(task.clientname, boost::bind(&Req2ReceiverMgr::HandleRspGetClient, this, _1));
                 }
                 else
                 {
@@ -495,7 +508,7 @@ private:
                     safe_queue_waiting_task(task);
                     safe_remove_cached_host_info(task.clientname);
                     if(m_server_connmgr)
-                        m_server_connmgr->ReqReceiverInfo(task.clientname);
+                        m_server_connmgr->ReqReceiverInfo(task.clientname, boost::bind(&Req2ReceiverMgr::HandleRspGetClient, this, _1));
                 }
                 else
                 {
