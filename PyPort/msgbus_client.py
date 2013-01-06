@@ -30,18 +30,26 @@ class NetMsgBus:
         NetMsgBus.serverconn_bg = ServerConnectionRunner(NetMsgBus.serverconn_mgr)
         NetMsgBus.serverconn_bg.daemon = True
 
-        if receiverport > 0:
-            NetMsgBus.receiver_mgr = NetMsgBusReceiverMgr(receiverip, receiverport, NetMsgBus.receiver_conn_map)
-            NetMsgBus.receiver_bg = ReceiverMgrServerRunner(NetMsgBus.receiver_mgr)
-            NetMsgBus.receiver_bg.daemon = True
         NetMsgBus.req2receiver_mgr = NetMsgBusReq2ReceiverMgr(NetMsgBus.serverconn_mgr)
         NetMsgBus.req2receiver_bg = Req2ReceiverMgrRunner(NetMsgBus.req2receiver_mgr)
         NetMsgBus.req2receiver_bg.daemon = True
 
         NetMsgBus.serverconn_bg.start()
-        if receiverport > 0:
-            NetMsgBus.receiver_bg.start()
         NetMsgBus.req2receiver_bg.start()
+
+    @staticmethod
+    def StartNetMsgBusReceiver(receiverip, receiverport, local_clientname):
+        if receiverport > 0:
+            NetMsgBus.receiver_mgr = NetMsgBusReceiverMgr(receiverip, receiverport, NetMsgBus.receiver_conn_map)
+            NetMsgBus.receiver_bg = ReceiverMgrServerRunner(NetMsgBus.receiver_mgr)
+            NetMsgBus.receiver_bg.daemon = True
+            NetMsgBus.receiver_bg.start()
+
+        ret = NetMsgBus.serverconn_mgr.RegisterNetMsgBusReceiver(receiverip, receiverport, local_clientname)
+        if ret:
+            log.info('register receiver success!!')
+        else:
+            log.info('register receiver failed. So receiver can only used for ip:port.')
 
     @staticmethod
     def DisConnectFromServer():
@@ -78,11 +86,12 @@ class NetMsgBus:
     def NetSendMsg(destname_or_ipport, msgid, msgdata, sendtype):
         netmsg_data = ReceiverMsgUtil.MakeMsgNetData(msgid, msgdata)
         if sendtype == kMsgSendType.SendUseServerRelay:
-            NetMsgBus.serverconn_mgr.PostNetMsgUseServerRelay(destname_or_ipport, netmsg_data)
+            return NetMsgBus.serverconn_mgr.PostNetMsgUseServerRelay(destname_or_ipport, netmsg_data)
         elif sendtype == kMsgSendType.SendDirectToClient:
-            NetMsgBus.req2receiver_mgr.PostMsgDirectToClient(destname_or_ipport, netmsg_data)
+            return NetMsgBus.req2receiver_mgr.PostMsgDirectToClient(destname_or_ipport, netmsg_data)
         else:
             log.warn('not supported sendtype : %d in NetSendMsg.', sendtype)
+            return False
 
     @staticmethod
     def NetAsyncGetData(destname_or_ipport, msgid, msgdata, callback):

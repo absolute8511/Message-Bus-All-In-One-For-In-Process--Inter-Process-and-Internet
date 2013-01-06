@@ -63,7 +63,7 @@ class MsgBus:
                     log.debug('handler has already been registered.')
                     return True
             self.all_handlers[msgid].append(weakref.ref(pair[0]))
-        log.debug('handler registere success. msgid: %s', msgid)
+        #log.debug('handler registered success. msgid: %s', msgid)
         return True
 
     def RemoveHandler(self, msgid, handler):

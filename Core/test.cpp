@@ -585,7 +585,7 @@ void testremotemsgbus_sync_sub(MsgBusParam& param)
         param, boost::bind(test_cb_forfuture, _1));
     if(future)
     {
-        if(future->get(5, rsp_content) && rsp_content.length() > 0)
+        if(future->get(5, rsp_content) && !future->has_err() && rsp_content.length() > 0)
         {
             LOG(g_log, lv_debug, "use netmsgbus async get net data success in thread:%" PRIu64 ", data:%s.", (uint64_t)pthread_self(), rsp_content.c_str());
         }

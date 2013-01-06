@@ -9,6 +9,7 @@ import logging
 from NetMsgBusDataDef import *
 import LocalMsgBus
 from NetMsgBus import *  # for protobuf Type
+from NetMsgBusFuture import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(created)-15s %(msecs)d %(levelname)8s %(thread)d %(name)s %(message)s")
 log = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
                 'unknown_pbtype' : self.HandlePBUnknown
                 }
 
+        self.future_mgr = FutureMgr()
         self.sockmap = sockmap
         self.writelocker = threading.Lock()
         self.server_ip = server_ip
@@ -43,10 +45,10 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         self.is_closed = False
         self.isreceiver_registered = False
         self.receiver_name = ''
-        self.RegisterNetMsgBusReceiver(receiver_ip, receiver_port, receiver_name, kServerBusyState.LOW)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         log.debug('connecting to %s', server_ip)
         self.connect( (server_ip, server_port) )
+        self.ConfirmAlive()
 
     def doloop(self):
         asyncore.loop(timeout=5, count=1, map=self.sockmap)
@@ -72,6 +74,7 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
 
     def handle_connect(self):
         log.debug('connect to server %s success', self.server_ip)
+        #self.RegisterNetMsgBusReceiver(receiver_ip, receiver_port, receiver_name, kServerBusyState.LOW)
 
     def handle_close(self):
         self.close()
@@ -124,17 +127,17 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
                 return
             bodybuffer = self.read_buffer[head.HeadSize():head.body_len + head.HeadSize()]
             self.read_buffer = self.read_buffer[head.body_len + head.HeadSize():]
-            log.debug('received pack type : %d, len:%d ', head.body_type, head.body_len)
-            self.rsp_handlers.get(head.body_type, self.HandleUnknown)(bodybuffer)
+            #log.debug('received pack type : %d, len:%d , msgid:%d', head.body_type, head.body_len, head.msg_id)
+            self.rsp_handlers.get(head.body_type, self.HandleUnknown)(head.msg_id, bodybuffer)
 
-    def HandleRspConfirmAlive(self, bodybuffer):
+    def HandleRspConfirmAlive(self, msg_id, bodybuffer):
         rsp = MsgBusConfirmAliveRsp()
         rsp.UnPackBody(bodybuffer)
         if(rsp.ret_code != 0):
             print "".join('%#04x' % ord(c) for c in bodybuffer)
             log.error("confirm alive not confirmed. ret_code: %d", rsp.ret_code)
 
-    def HandleRspRegister(self, bodybuffer):
+    def HandleRspRegister(self, msg_id, bodybuffer):
         reg_rsp = MsgBusRegisterRsp()
         reg_rsp.UnPackBody(bodybuffer)
         if(reg_rsp.ret_code == 0):
@@ -144,32 +147,48 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         else:
             self.isreceiver_registered = False;
             log.info('netmsgbus receiver register failed: %s', reg_rsp.service_name)
+        futuredata = self.future_mgr.PopFuture(msg_id)
+        if futuredata:
+            if reg_rsp.ret_code == 0:
+                futuredata.set_result(reg_rsp.service_name)
+            else:
+                futuredata.set_err(reg_rsp.GetErrMsg())
 
-    def HandleRspUnRegister(self, bodybuffer):
+    def HandleRspUnRegister(self, msg_id, bodybuffer):
         log.info('unregister rsp from server.')
 
-    def HandleRspGetClient(self, bodybuffer):
+    def HandleRspGetClient(self, msg_id, bodybuffer):
         rsp = MsgBusGetClientRsp()
         rsp.UnPackBody(bodybuffer)
-        if rsp.ret_code == 0:
-            dest_ip = socket.inet_ntoa(rsp.dest_host.server_ip)
-            dest_port = rsp.dest_host.server_port
-            dest_clientname = rsp.dest_name
-            log.info('get client info returned. ret name: %s, ip:port : %s:%d', dest_clientname, dest_ip, dest_port)
-            LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', (rsp.ret_code, dest_clientname, (dest_ip, dest_port)))
-        else:
-            log.info('msgbus server return error while get client info, ret_code: %d.', rsp.ret_code)
+        #if rsp.ret_code == 0:
+        #    dest_ip = socket.inet_ntoa(rsp.dest_host.server_ip)
+        #    dest_port = rsp.dest_host.server_port
+        #    dest_clientname = rsp.dest_name
+        #    log.info('get client info returned. ret name: %s, ip:port : %s:%d', dest_clientname, dest_ip, dest_port)
+        #    #LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', (rsp.ret_code, dest_clientname, (dest_ip, dest_port)))
+        #else:
+        #    log.info('msgbus server return error while get client info, ret_code: %d.', rsp.ret_code)
+        futuredata = self.future_mgr.PopFuture(msg_id)
+        if futuredata:
+            futuredata.set_result((rsp.ret_code, rsp.dest_name, (socket.inet_ntoa(rsp.dest_host.server_ip), rsp.dest_host.server_port) ))
 
-    def HandleRspSendMsg(self, bodybuffer):
+    def HandleRspSendMsg(self, msg_id, bodybuffer):
         #本客户端通过服务器向其他客户端转发消息得到的服务器返回确认
         rsp = MsgBusSendMsgRsp()
         rsp.UnPackBody(bodybuffer)
         if rsp.ret_code == 0:
-            log.debug('send message using server relay return success.')
+            pass
+            #log.debug('send message using server relay return success.')
         else:
             log.info('send msg by server error: %d, errmsg: %s.', rsp.ret_code, rsp.GetErrMsg())
+        futuredata = self.future_mgr.PopFuture(msg_id)
+        if futuredata:
+            if rsp.ret_code == 0:
+                futuredata.set_result('success')
+            else:
+                futuredata.set_err(rsp.GetErrMsg())
         
-    def HandleReqSendMsg(self, bodybuffer):
+    def HandleReqSendMsg(self, msg_id, bodybuffer):
         #收到服务器转发的其他客户端的发消息请求
         req = MsgBusSendMsgReq()
         req.UnPackBody(bodybuffer)
@@ -184,19 +203,22 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             return
         LocalMsgBus.SendMsg(msgid, ReceiverMsgUtil.GetMsgParam(netmsgdata));
 
-    def HandleRspPBBody(self, bodybuffer):
+    def HandleRspPBBody(self, msg_id, bodybuffer):
         pbpack = MsgBusPackPBType()
         pbpack.UnPackBody(bodybuffer)
         log.debug('got pbrsp, pbtype:%s.', pbpack.GetPBType())
-        self.pbdata_handlers.get(pbpack.GetPBType(), self.HandlePBUnknown)(pbpack.GetPBData())
+        self.pbdata_handlers.get(pbpack.GetPBType(), self.HandlePBUnknown)(msg_id, pbpack.GetPBData())
 
-    def HandleUnknown(self, bodybuffer):
+    def HandleUnknown(self, msg_id, bodybuffer):
         log.error('got unknown body from netmsgbus server.')
 
-    def HandlePBQueryServicesRsp(self, pbdata):
+    def HandlePBQueryServicesRsp(self, msg_id, pbdata):
         rsp = PBParam_pb2.PBQueryServicesRsp()
         rsp.ParseFromString(pbdata)
-        print 'all available service matched are:' + ','.join(rsp.service_name)
+        futuredata = self.future_mgr.PopFuture(msg_id)
+        if futuredata:
+            futuredata.set_result(','.join(rsp.service_name))
+        #print 'all available service matched are:' + ','.join(rsp.service_name)
 
     def HandlePBUnknown(self, pbdata):
         log.info('got unknown_pbtype, pbdata is : %s .', pbdata)
@@ -216,7 +238,9 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         if not self.connected:
             log.info('netmsgbus server is not connecting. Register will be done after connected')
 
+        (futureid, futuredata) = self.future_mgr.GetFuture()
         reg_req = MsgBusRegisterReq() 
+        reg_req.msg_id = futureid
         reg_req.service_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         reg_req.service_host = host
         #log.debug('Register pack len: %d', len(reg_req.PackData()))
@@ -225,7 +249,13 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
             self.buffer += reg_req.PackData() 
         if self.connected:
             self.handle_write()
-        return True
+        ret = None
+        ret = futuredata.get(15)
+        if ret and (not futuredata.has_err):
+            return True
+
+        log.debug('register failed: %s', ret)
+        return False
 
     def UpdateReceiverState(self, busy_state):
         if self.receiver_port == 0 or self.receiver_name == '':
@@ -250,45 +280,63 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         return True
 
     def ConfirmAlive(self):
-        if not self.connected:
-            return False
         req = MsgBusConfirmAliveReq()
         req.alive_flag = 0
         with self.writelocker:
             self.buffer += req.PackData()
-        self.handle_write()
+        if self.connected:
+            self.handle_write()
         return True
 
     def PostNetMsgUseServerRelay(self, clientname, data):
         if not self.connected:
             return False
+        (futureid, futuredata) = self.future_mgr.GetFuture()
         sendmsg_req = MsgBusSendMsgReq()
         sendmsg_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         sendmsg_req.from_name = self.receiver_name.ljust(MAX_SERVICE_NAME, '\0')
-        tickid = time.time()
-        tickid -= int(tickid)/1000000*1000000
-        sendmsg_req.msg_id = int(tickid*1000)
+        sendmsg_req.msg_id = futureid
         log.debug('server tick msgid %d, sendmsg use server relay from:%s, to:%s.', sendmsg_req.msg_id, sendmsg_req.from_name, sendmsg_req.dest_name);
         sendmsg_req.SetMsgContent(data)
         with self.writelocker:
             self.buffer += sendmsg_req.PackData()
         self.handle_write()
-        return True
+        ret = futuredata.get(5)
+        if ret and (not futuredata.has_err):
+            return True
+        log.debug('postmsg using server relay failed: %s', ret)
+        return False
 
-    def ReqReceiverInfo(self, clientname):
+    def ReqReceiverInfo(self, clientname, cb = None):
         if not self.connected:
-            return False
+            return None
+        (futureid, futuredata) = self.future_mgr.GetFuture(cb)
         get_client_req = MsgBusGetClientReq()
+        get_client_req.msg_id = futureid
         get_client_req.dest_name = clientname.ljust(MAX_SERVICE_NAME, '\0')
         with self.writelocker:
             self.buffer += get_client_req.PackData()
         self.handle_write()
-        return True
+        if cb is None:
+            ret = futuredata.get(5)
+            if ret and (not futuredata.has_err):
+                (ret_code, clientname, hostinfo) = ret
+                if ret_code == 0:
+                    #log.info('get client info returned. client:%s, ip:port : %s:%d', clientname, hostinfo[0], hostinfo[1])
+                    #LocalMsgBus.SendMsg('netmsg.sever.rsp.getclient', (rsp.ret_code, dest_clientname, (dest_ip, dest_port)))
+                    return hostinfo
+                else:
+                    log.info('msgbus server return error while get client info, ret_code: %d.', ret_code)
+                    return None
+            return None
+        return None
 
     def QueryAvailableServices(self, match_str):
         if not self.connected:
-            return False
+            return None
+        (futureid, futuredata) = self.future_mgr.GetFuture()
         services_query = MsgBusPackPBType()
+        services_query.msg_id = futureid
         pbreq = PBParam_pb2.PBQueryServicesReq()
         pbreq.match_prefix = match_str
         pbtype = PBParam_pb2.PBQueryServicesReq.DESCRIPTOR.full_name
@@ -298,8 +346,12 @@ class NetMsgBusServerConnMgr(asyncore.dispatcher):
         with self.writelocker:
             self.buffer += services_query.PackData()
         self.handle_write()
+        ret = futuredata.get(5)
+        if ret and (not futuredata.has_err):
+            return ret
+        log.debug('query available services failed: %s', ret)
         #print "".join('%#04x' % ord(c) for c in services_query.PackData())
-        return True
+        return None
 
 class ServerConnectionRunner(threading.Thread):
     def __init__(self, servermgr):
