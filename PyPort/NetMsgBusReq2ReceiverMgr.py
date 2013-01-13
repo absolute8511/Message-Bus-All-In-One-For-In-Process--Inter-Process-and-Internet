@@ -87,7 +87,7 @@ class Req2ReceiverChannel(asyncore.dispatcher):
                 return
             rsp.data = self.read_buffer[rsp.HeadSize():rsp.data_len + rsp.HeadSize()]
             self.read_buffer = self.read_buffer[rsp.data_len + rsp.HeadSize():]
-            log.debug('reading receiver rsp : future_id :%d, data:%s ', rsp.sync_sid, rsp.data)
+            #log.debug('reading receiver rsp : future_id :%d, data:%s ', rsp.sync_sid, rsp.data)
             self.req2receivermgr.handle_channel_rsp(rsp.sync_sid, rsp.data)
 
 class TcpClientPool:
@@ -150,7 +150,7 @@ class NetMsgBusReq2ReceiverMgr(MsgBusHandlerBase):
             if self.GetCachedClient(ipport_or_name) is None:
                 destclient = self.server_conn_mgr.ReqReceiverInfo(ipport_or_name)
                 if destclient is None:
-                    return False
+                    return (False, None)
                 with self.cache_lock:
                     self.cached_client_info[ipport_or_name] = destclient;
                 ipport_or_name = destclient

@@ -24,6 +24,21 @@ class TestHandler:
         return test_localmsg_handler(msgid, msgparam)
 
 
+class ConcurrentTest(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+
+    def run(self):
+        times = 10000
+        while times > 0:
+            times = times - 1;
+            rsp = NetMsgBus.NetSyncGetData(('127.0.0.1', 9101), 'msg_netmsgbus_testmsg1', '{"testkey":11111, "testlongdata": "frompythondata"}', 3)
+            if rsp[0] and rsp[1]:
+                pass
+                #print 'sync get data from receiver: ' + rsp[1]
+            else:
+                print 'sync get data from receiver failed.'
+
 LocalMsgBus.InitMsgBus()
 
 test_handler = TestHandler()
@@ -93,7 +108,19 @@ if future.get(5):
 else:
     print 'async get data from receiver using name failed'
 
+log.debug('begin ConcurrentTest')
+concurrent_tests = []
+for i in range(10):
+    concurrent_tests.append(ConcurrentTest())
+    concurrent_tests[i].daemon = True
+
+for i in range(10):
+    concurrent_tests[i].start()
 # wait for test receiver server, wait for data from other client. and test for long no active
+for i in range(10):
+    concurrent_tests[i].join()
+
+log.debug('concurrent_tests finished.')
 log.debug('waiting 30s to quit ...')
 NetMsgBus.Wait(30)
 NetMsgBus.Destroy()

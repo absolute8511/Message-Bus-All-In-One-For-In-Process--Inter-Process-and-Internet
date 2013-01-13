@@ -119,8 +119,8 @@ public:
     }
     bool testMsgBus1(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
-        printMsg(msgid, param, __FUNCTION__);
-        GenerateNextTestParam(param);
+        //printMsg(msgid, param, __FUNCTION__);
+        //GenerateNextTestParam(param);
         //NetMsgBusSendMsg("test.receiverclient_C", "rsp_msg_netmsgbus_testmsg1", param, SendDirectToClient);
         //NetMsgBusSendMsg("", "rsp_msg_netmsgbus_testmsg1", param, SendUseServerRelay);
         //sleep(1);
@@ -137,7 +137,7 @@ public:
     }
     bool testMsgBus3(const std::string& msgid, MsgBusParam& param, bool& is_continue)
     {
-        printMsg(msgid, param, __FUNCTION__);
+        //printMsg(msgid, param, __FUNCTION__);
         std::string rspstr("Yeah! I send the rsp data to you.");
         param = CustomType2Param(rspstr);
         //sleep(3);
@@ -983,8 +983,8 @@ int main()
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 0);
     //threadpool::queue_work_task(boost::bind(testlocalmsgbus), 1);
     //testconcurrent_local();
-    testremotemsgbus();
-    //testremotemsgbus_without_server();
+    //testremotemsgbus();
+    testremotemsgbus_without_server();
     MsgHandlerMgr::DropAllInstance();
     EventLoopPool::DestroyEventLoopPool();
     NetMsgBusDisConnectAll();
