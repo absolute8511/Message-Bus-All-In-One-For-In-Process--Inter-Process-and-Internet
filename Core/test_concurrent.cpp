@@ -384,7 +384,11 @@ void testremotemsgbus()
         return;
     }
 
-    NetMsgBusQueryServices("");
+    std::string rsp;
+    if(NetMsgBusQueryServices("", rsp))
+    {
+        LOG(g_log, lv_info, "query available services is :%s.", rsp.c_str());
+    }
 
     //bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
     //assert(ret);
@@ -448,8 +452,9 @@ void testremotemsgbus()
         MsgBusParam param = CustomType2Param(xp);
         uint32_t sendcounter = 0;
 
-        
-        NetMsgBusQueryHostInfo("test.receiverclient_A");
+        std::string ip;
+        unsigned short int port = 0; 
+        NetMsgBusQueryHostInfo("test.receiverclient_A", ip, port);
         sleep(3);
         int mintimeout = 10;
 
@@ -525,7 +530,7 @@ void testremotemsgbus()
         }
         printf("\n");
         int64_t endtime = utility::GetTickCount();
-        printf("%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, (starttime,endtime));
+        printf("%d msgs used time:%lld, (start,end): (%lld,%lld)\n", sendcounter, endtime - starttime, starttime,endtime);
         //
     }
 
@@ -535,7 +540,7 @@ void testremotemsgbus()
             break;
         sleep(1);
     }
-    NetMsgBusDisConnect();
+    NetMsgBusDisConnectFromServer();
 }
 
 void testSyncGetData()
@@ -669,8 +674,8 @@ private:
 public:
     TestEventLoop()
     {
-        boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
-        EventLoopPool::CreateEventLoop("test_event_loop", spwaiter);
+        //boost::shared_ptr<SockWaiterBase> spwaiter(new SelectWaiter());
+        EventLoopPool::CreateEventLoop("test_event_loop");
     }
     size_t test_onRead(TcpSockSmartPtr sp, const char* pdata, size_t size)
     {
