@@ -14,7 +14,7 @@ void named_worker_thread::remove_self_from_threadpool()
 }
 bool named_worker_thread::execute_task()
 {
-    task_type task;
+    std::deque<task_type> running_task;
     {
         core::common::locker_guard guard(m_locker);
         while(m_task_container.empty())
@@ -32,12 +32,16 @@ bool named_worker_thread::execute_task()
         {
             return false;
         }
-        task = m_task_container.front();
-        m_task_container.pop_front();
+        running_task.swap(m_task_container);
     }
-    if(task)
+    while(!running_task.empty())
     {
-        task();
+        task_type& task = running_task.front();
+        if(task)
+        {
+            task();
+        }
+        running_task.pop_front();
     }
     return true;
 }

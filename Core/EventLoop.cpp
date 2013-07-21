@@ -190,15 +190,14 @@ void* EventLoop::Loop(void* param)
         std::vector<EventLoop::EvTask> tmptasks;
         {
             common::locker_guard guard(el->m_lock);
-            tmptasks = el->m_pendings;
-            el->m_pendings.clear();
+            tmptasks.swap( el->m_pendings );
         }
 
         for(size_t i = 0; i < tmptasks.size(); i++)
         {
             tmptasks[i]();
         }
-        tmptasks.clear();
+        std::vector<EventLoop::EvTask>().swap(tmptasks);
 
 
         if(el->m_terminal)

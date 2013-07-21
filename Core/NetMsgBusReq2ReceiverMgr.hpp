@@ -554,7 +554,7 @@ private:
         EventLoopPool::CreateEventLoop("postmsg_event_loop");
         while(true)
         {
-            Req2ReceiverTask rtask;
+            Req2ReceiverTaskContainerT rtask_list;
             {
                 // lock 
                 core::common::locker_guard guard(req2recv_mgr->m_reqtoreceiver_locker);
@@ -570,21 +570,25 @@ private:
                     //printf("waiting the request task to client.\n");
                     req2recv_mgr->m_reqtoreceiver_cond.wait(req2recv_mgr->m_reqtoreceiver_locker);
                 }
-                rtask = req2recv_mgr->m_reqtoreceiver_task_container.front();
-                req2recv_mgr->m_reqtoreceiver_task_container.pop_front();
+                rtask_list.swap( req2recv_mgr->m_reqtoreceiver_task_container );
             }
-            std::string thread_name;
-            if(rtask.clientname.size() <= 2)
+            while(!rtask_list.empty())
             {
-                thread_name = "byip";
+                Req2ReceiverTask& rtask = rtask_list.front();
+                std::string thread_name;
+                if(rtask.clientname.size() <= 2)
+                {
+                    thread_name = "byip";
+                }
+                else
+                {
+                    thread_name = rtask.clientname.substr(rtask.clientname.size() - 2);
+                }
+                // in order to make sure the order of sendmsg , we should use the same thread to process the same client name sendmsg.
+                threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, rtask),
+                    "ProcessReqToReceiver" + thread_name);
+                rtask_list.pop_front();
             }
-            else
-            {
-                thread_name = rtask.clientname.substr(rtask.clientname.size() - 2);
-            }
-            // in order to make sure the order of sendmsg , we should use the same thread to process the same client name sendmsg.
-            threadpool::queue_work_task_to_named_thread(boost::bind(&Req2ReceiverMgr::ProcessReqToReceiver, req2recv_mgr, rtask),
-                "ProcessReqToReceiver" + thread_name);
         }
         req2recv_mgr->m_req2receiver_running = false;
         return 0;

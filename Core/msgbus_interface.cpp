@@ -494,8 +494,7 @@ void* MsgTaskProcessProc(void*)
     {
         if( s_msgbus_terminate )
             break;
-        MsgTaskVec mtasks;
-        MsgTask firsttask;
+        std::vector<std::pair<std::string, MsgTaskVec> > running_task_list;
         std::string curmsgid;
         {
             core::common::locker_guard guard(s_msgtask_locker);
@@ -508,68 +507,79 @@ void* MsgTaskProcessProc(void*)
                 }
                 s_msgtask_condition.wait(s_msgtask_locker);
             }
-            // process sendmsg first
-            if(!s_all_sendmsgtask.empty())
+            while(!s_all_sendmsgtask.empty() || !s_all_msgtask.empty())
             {
-                firsttask = s_all_sendmsgtask.front();
-                curmsgid = firsttask.msgid;
-                mtasks.push_back(firsttask);
-                s_all_sendmsgtask.pop_front();
-            }
-            else
-            {
-                firsttask = s_all_msgtask.front();
-                curmsgid = firsttask.msgid;
-                mtasks.push_back(firsttask);
-                s_all_msgtask.pop_front();
-                // to enhance the performance, we merge the same msgid when using postmsg
-                while(!s_all_msgtask.empty())
+                // process sendmsg first
+                if(!s_all_sendmsgtask.empty())
                 {
-                    MsgTask t = s_all_msgtask.front();
-                    if(t.msgid != curmsgid)
-                        break;
-                    mtasks.push_back(t);
+                    MsgTask& firsttask = s_all_sendmsgtask.front();
+                    curmsgid = firsttask.msgid;
+                    running_task_list.push_back(std::pair<std::string, MsgTaskVec>(curmsgid, MsgTaskVec()));
+                    running_task_list.back().second.push_back(firsttask);
+                    s_all_sendmsgtask.pop_front();
+                }
+                else
+                {
+                    MsgTask& firsttask = s_all_msgtask.front();
+                    curmsgid = firsttask.msgid;
+                    running_task_list.push_back(std::pair<std::string, MsgTaskVec>(curmsgid, MsgTaskVec()));
+                    running_task_list.back().second.push_back(firsttask);
                     s_all_msgtask.pop_front();
+                    // to enhance the performance, we merge the same msgid when using postmsg
+                    while(!s_all_msgtask.empty())
+                    {
+                        MsgTask& t = s_all_msgtask.front();
+                        if(t.msgid != curmsgid)
+                            break;
+                        running_task_list.back().second.push_back(t);
+                        s_all_msgtask.pop_front();
+                    }
                 }
             }
         }
         if(s_msgbus_terminate)
             break;
-        // 在消息处理线程中以同步的方式处理消息
-        SendMsgInMsgBusThread(curmsgid, mtasks);
-        size_t task_num = mtasks.size();
-        for(size_t i = 0; i < task_num; ++i)
+        for(size_t j = 0; j < running_task_list.size(); ++j)
         {
-            firsttask = mtasks[i];
-            boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo;
-            if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
-            {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
-                core::common::locker_guard guard(s_ready_sendmsg_locker);
-                ReadySendMsgResultT::const_iterator cit = s_ready_sendmsgs.find(firsttask.callertid);
-                if(cit == s_ready_sendmsgs.end())
-                {
-                    g_log.Log(lv_warn, "send message returned a non-exist callerid, %llu", firsttask.callertid);
-                    continue;
+            curmsgid = running_task_list[j].first;
+            MsgTaskVec& mtasks = running_task_list[j].second;
+
+            // 在消息处理线程中以同步的方式处理消息
+            SendMsgInMsgBusThread(curmsgid, mtasks);
+            size_t task_num = mtasks.size();
+            for(size_t i = 0; i < task_num; ++i)
+            {
+                MsgTask& firsttask = mtasks[i];
+                boost::shared_ptr< ReadySendMsgInfo > sp_readyinfo;
+                if(pthread_equal(firsttask.callertid, msgbus_tid) == 0)
+                {// 非总线线程调用的, 需要通知调用线程消息已经处理完毕
+                    core::common::locker_guard guard(s_ready_sendmsg_locker);
+                    ReadySendMsgResultT::const_iterator cit = s_ready_sendmsgs.find(firsttask.callertid);
+                    if(cit == s_ready_sendmsgs.end())
+                    {
+                        g_log.Log(lv_warn, "send message returned a non-exist callerid, %llu", firsttask.callertid);
+                        continue;
+                    }
+                    else
+                    {
+                        sp_readyinfo = cit->second;
+                    }
                 }
                 else
                 {
-                    sp_readyinfo = cit->second;
+                    continue;
                 }
-            }
-            else
-            {
-                continue;
-            }
 
-            core::common::locker_guard guard(sp_readyinfo->wait_lock);
-            sp_readyinfo->ready = true;
-            sp_readyinfo->rspparam = firsttask.msgparam;
-            sp_readyinfo->rspresult = firsttask.ret;
-            //LOG(g_log, lv_debug, "notify sendmsg ready, tid:%lld, msg:%s, rspdata:%s", (uint64_t)firsttask.callertid,
-            //    firsttask.msgid.c_str(), firsttask.msgparam.paramdata.get());
-            sp_readyinfo->wait_cond.notify_all();
+                core::common::locker_guard guard(sp_readyinfo->wait_lock);
+                sp_readyinfo->ready = true;
+                sp_readyinfo->rspparam = firsttask.msgparam;
+                sp_readyinfo->rspresult = firsttask.ret;
+                //LOG(g_log, lv_debug, "notify sendmsg ready, tid:%lld, msg:%s, rspdata:%s", (uint64_t)firsttask.callertid,
+                //    firsttask.msgid.c_str(), firsttask.msgparam.paramdata.get());
+                sp_readyinfo->wait_cond.notify_all();
+            }
         }
-        MsgTaskVec().swap(mtasks);
+        std::vector<std::pair<std::string, MsgTaskVec> >().swap(running_task_list);
     }
     s_msgbus_running = false;
     return 0;

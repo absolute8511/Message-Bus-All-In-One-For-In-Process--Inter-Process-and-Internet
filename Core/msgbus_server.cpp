@@ -836,8 +836,8 @@ void* msgbus_process_thread( void* param )
 {
     while(true)
     {
-        ReqTask reqtask;
-        BroadcastTask broadcast_task;
+        std::deque< ReqTask > running_reqtask_list;
+        std::deque< BroadcastTask > running_broadcast_task_list;
         bool hasreqtask = false;
         bool hasbroadtask = false;
         {
@@ -850,76 +850,86 @@ void* msgbus_process_thread( void* param )
             }
             if( s_netmsgbus_server_terminate )
                 return 0;
+            
             if(!reqtoclient_task_container.empty())
             {
-                reqtask = reqtoclient_task_container.front();
-                reqtoclient_task_container.pop_front();
+                running_reqtask_list.swap( reqtoclient_task_container );
+                //reqtoclient_task_container.pop_front();
                 hasreqtask = true;
             }
             if(!broadcast_task_container.empty())
             {
-                broadcast_task = broadcast_task_container.front();
-                broadcast_task_container.pop_front();
+                running_broadcast_task_list.swap( broadcast_task_container );
                 hasbroadtask = true;
             }
         }
         if(hasreqtask)
         {
-            TcpSockContainerT destclients;
+            while(!running_reqtask_list.empty())
             {
-                core::common::locker_guard guard(g_activeclients_locker);
-                ActiveClientTcpContainer::const_iterator cit = active_clients.begin();
-                while(cit != active_clients.end())
+                ReqTask& reqtask = running_reqtask_list.front();
+                TcpSockContainerT destclients;
                 {
-                    if(is_prefix_matching(cit->first, reqtask.client_name))
+                    core::common::locker_guard guard(g_activeclients_locker);
+                    ActiveClientTcpContainer::const_iterator cit = active_clients.begin();
+                    while(cit != active_clients.end())
                     {
-                        //g_log.Log(lv_debug, "matching name %s vs %s", cit->first.c_str(), reqtask.client_name.c_str());
-                        TcpSockSmartPtr destclient;
-                        if(msgbus_select_best_client(cit->second, destclient))
+                        if(is_prefix_matching(cit->first, reqtask.client_name))
                         {
-                            destclients[(long)destclient.get()] = destclient;
+                            //g_log.Log(lv_debug, "matching name %s vs %s", cit->first.c_str(), reqtask.client_name.c_str());
+                            TcpSockSmartPtr destclient;
+                            if(msgbus_select_best_client(cit->second, destclient))
+                            {
+                                destclients[(long)destclient.get()] = destclient;
+                            }
                         }
+                        ++cit;
                     }
-                    ++cit;
                 }
-            }
-            TcpSockContainerT::iterator destit = destclients.begin();
-            while(destit != destclients.end())
-            {
-                if(destit->second)
-                    destit->second->SendData(reqtask.data.get(), reqtask.data_len);
-                ++destit;
+                TcpSockContainerT::iterator destit = destclients.begin();
+                while(destit != destclients.end())
+                {
+                    if(destit->second)
+                        destit->second->SendData(reqtask.data.get(), reqtask.data_len);
+                    ++destit;
+                }
+                running_reqtask_list.pop_front();
             }
         }
         if(hasbroadtask)
         {
-            ActiveClientTcpContainer allclients;
+            while(!running_broadcast_task_list.empty())
             {
-                core::common::locker_guard guard(g_activeclients_locker);
-                ActiveClientTcpContainer::const_iterator cit = active_clients.begin();
-                while(cit != active_clients.end())
+                BroadcastTask& broadcast_task = running_broadcast_task_list.front();
+                ActiveClientTcpContainer allclients;
                 {
-                    //TcpSockSmartPtr destclient;
-                    TcpSockSmartPtr destclient;
-                    if(msgbus_select_best_client(cit->second, destclient))
+                    core::common::locker_guard guard(g_activeclients_locker);
+                    ActiveClientTcpContainer::const_iterator cit = active_clients.begin();
+                    while(cit != active_clients.end())
                     {
-                        allclients[cit->first][(long)destclient.get()] = destclient;
+                        //TcpSockSmartPtr destclient;
+                        TcpSockSmartPtr destclient;
+                        if(msgbus_select_best_client(cit->second, destclient))
+                        {
+                            allclients[cit->first][(long)destclient.get()] = destclient;
+                        }
+                        ++cit;
                     }
-                    ++cit;
                 }
-            }
-            ActiveClientTcpContainer::iterator allit = allclients.begin();
-            while( allit != allclients.end() )
-            {
-                TcpSockContainerT::iterator destit = allit->second.begin();
-                while(destit != allit->second.end())
-                //for(size_t i = 0;i < allcit->second.size(); ++i)
+                ActiveClientTcpContainer::iterator allit = allclients.begin();
+                while( allit != allclients.end() )
                 {
-                    if( destit->second )
-                        destit->second->SendData(broadcast_task.data.get(), broadcast_task.data_len);
-                    ++destit;
+                    TcpSockContainerT::iterator destit = allit->second.begin();
+                    while(destit != allit->second.end())
+                        //for(size_t i = 0;i < allcit->second.size(); ++i)
+                    {
+                        if( destit->second )
+                            destit->second->SendData(broadcast_task.data.get(), broadcast_task.data_len);
+                        ++destit;
+                    }
+                    ++allit;
                 }
-                ++allit;
+                running_broadcast_task_list.pop_front();
             }
         }
     }
