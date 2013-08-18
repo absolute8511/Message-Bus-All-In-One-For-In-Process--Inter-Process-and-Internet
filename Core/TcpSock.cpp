@@ -214,6 +214,11 @@ void TcpSock::DisAllowSend()
         }
         else
         {
+            if(!m_evloop->IsInLoopThread())
+            {
+                m_evloop->QueueTaskToLoop(boost::bind(&TcpSock::AddAndUpdateEvent, shared_from_this(), EV_WRITE));
+                return;
+            }
             AddAndUpdateEvent(EV_WRITE);
         }
     }
