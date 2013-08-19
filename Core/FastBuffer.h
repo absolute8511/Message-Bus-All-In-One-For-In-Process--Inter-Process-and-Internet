@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <assert.h>
+#include <sys/types.h>
 
 namespace core { namespace net {
 class FastBuffer
