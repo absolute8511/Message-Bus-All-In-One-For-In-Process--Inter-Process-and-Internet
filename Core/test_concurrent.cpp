@@ -384,12 +384,6 @@ void testremotemsgbus()
         return;
     }
 
-    std::string rsp;
-    if(NetMsgBusQueryServices("", rsp))
-    {
-        LOG(g_log, lv_info, "query available services is :%s.", rsp.c_str());
-    }
-
     //bool ret = threadpool::queue_work_task(boost::bind(waitforbreak),0);
     //assert(ret);
 
@@ -428,6 +422,11 @@ void testremotemsgbus()
         {
             printf("register receiver client error.\n");
             return;
+        }
+        std::string rsp;
+        if(NetMsgBusQueryServices("", rsp))
+        {
+            LOG(g_log, lv_info, "query available services is :%s.", rsp.c_str());
         }
     }
     else if(inputflag == 's')
