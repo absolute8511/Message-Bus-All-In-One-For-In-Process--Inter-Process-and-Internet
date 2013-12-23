@@ -21,6 +21,14 @@ namespace NetMsgBus
 {
 static core::LoggerCategory g_log("NetMsgBusUtility");
 
+static const std::string endcoded_percent_str = "%25";
+static const std::string percent_str = "%";
+static const std::string encoded_and_str = "%26";
+static const std::string and_str = "&";
+static const std::string equal_str = "=";
+static const std::string msgid_str = "msgid";
+static const std::string msgparam_str = "msgparam";
+static const std::string msgsender_str = "msgsender";
 inline void EncodeMsgKeyValue(std::string& orig_value)
 {
     // replace % and &
@@ -29,12 +37,12 @@ inline void EncodeMsgKeyValue(std::string& orig_value)
     {
         if(orig_value[i] == '%')
         {
-            orig_value.replace(i, 1, "%25");
+            orig_value.replace(i, 1, endcoded_percent_str);
             i += 3;
         }
         else if(orig_value[i] == '&')
         {
-            orig_value.replace(i, 1, "%26");
+            orig_value.replace(i, 1, encoded_and_str);
             i += 3;
         }
         else
@@ -53,9 +61,9 @@ inline void DecodeMsgKeyValue(std::string& orig_value)
         if(orig_value[i] == '%')
         {
             if(orig_value[i+1]=='2' && orig_value[i+2] == '5')
-                orig_value.replace(i, 3, "%");
+                orig_value.replace(i, 3, percent_str);
             else if(orig_value[i+1]=='2' && orig_value[i+2] == '6')
-                orig_value.replace(i, 3, "&");
+                orig_value.replace(i, 3, and_str);
             else
             {
                 printf("warning: unknow encode msgbus value string : %s.", orig_value.substr(i, 3).c_str());
@@ -69,10 +77,10 @@ inline void DecodeMsgKeyValue(std::string& orig_value)
 inline bool GetMsgKey(const std::string& netmsgbus_msgcontent, const std::string& msgkey, 
     std::string& msgvalue)
 {
-    std::size_t startpos = netmsgbus_msgcontent.find(msgkey + "=");
+    std::size_t startpos = netmsgbus_msgcontent.find(msgkey + equal_str);
     if(startpos != std::string::npos)
     {
-        std::size_t endpos = netmsgbus_msgcontent.find("&", startpos);
+        std::size_t endpos = netmsgbus_msgcontent.find(and_str, startpos);
         if(endpos != std::string::npos)
         {
             msgvalue = std::string(netmsgbus_msgcontent, startpos + msgkey.size() + 1,
@@ -91,7 +99,7 @@ inline bool GetMsgKey(const std::string& netmsgbus_msgcontent, const std::string
 
 inline bool CheckMsgSender(const std::string& netmsgbus_msgcontent, std::string& msgsender)
 {
-    if(GetMsgKey(netmsgbus_msgcontent, "msgsender", msgsender))
+    if(GetMsgKey(netmsgbus_msgcontent, msgsender_str, msgsender))
     {
         return FilterMgr::FilterBySender(msgsender);
     }
@@ -100,7 +108,7 @@ inline bool CheckMsgSender(const std::string& netmsgbus_msgcontent, std::string&
 
 inline bool CheckMsgId(const std::string& netmsgbus_msgcontent, std::string& msgid)
 {
-    if(GetMsgKey(netmsgbus_msgcontent, "msgid", msgid))
+    if(GetMsgKey(netmsgbus_msgcontent, msgid_str, msgid))
     {
         return FilterMgr::FilterByMsgId(msgid);
     }
@@ -110,7 +118,7 @@ inline bool CheckMsgId(const std::string& netmsgbus_msgcontent, std::string& msg
 inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_array<char>& msgparam, uint32_t& param_len)
 {
     std::string msgparamstr;
-    if(GetMsgKey(netmsgbus_msgcontent, "msgparam", msgparamstr))
+    if(GetMsgKey(netmsgbus_msgcontent, msgparam_str, msgparamstr))
     {
         assert(msgparamstr.size());
         msgparam.reset(new char[msgparamstr.size()]);
@@ -125,13 +133,16 @@ inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_a
 inline void GenerateNetMsgContent(const std::string& msgid, MsgBusParam param, const std::string& msgsender,
     MsgBusParam& netmsg_data)
 {
+    const static std::string msgidstr = "msgid=";
+    const static std::string andmsgparamstr = "&msgparam=";
+    const static std::string andmsgsenderstr = "&msgsender=";
     std::string netmsg_str(param.paramdata.get(), param.paramlen);
     std::string encodemsgid = msgid;
     std::string encode_msgsender = msgsender;
     EncodeMsgKeyValue(encodemsgid);
     EncodeMsgKeyValue(netmsg_str);
     EncodeMsgKeyValue(encode_msgsender);
-    netmsg_str = "msgid=" + encodemsgid + "&msgparam=" + netmsg_str + "&msgsender=" + encode_msgsender;
+    netmsg_str = msgidstr + encodemsgid + andmsgparamstr + netmsg_str + andmsgsenderstr + encode_msgsender;
     netmsg_data.paramlen = netmsg_str.size();
     netmsg_data.paramdata.reset(new char[netmsg_data.paramlen]);
     memcpy(netmsg_data.paramdata.get(), netmsg_str.data(), netmsg_data.paramlen);

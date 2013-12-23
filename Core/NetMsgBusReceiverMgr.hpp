@@ -262,7 +262,7 @@ private:
                 {
                     m_client_senders[sp_tcp->GetFD()] = sendername;
                 }
-                printf("check sender identity:%lld, sender:%s \n", (int64_t)core::utility::GetTickCount(), sendername.c_str());
+                //printf("check sender identity:%lld, sender:%s \n", (int64_t)core::utility::GetTickCount(), sendername.c_str());
             }
             if(sync_sid != 0)
             {

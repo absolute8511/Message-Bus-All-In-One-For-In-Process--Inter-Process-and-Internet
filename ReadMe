@@ -9,4 +9,4 @@ Network: 1000Mbit
 
 1. 100 concurrent , 4 tcp connection pool size, 100bytes request and 100bytes response.
 sync call for rpc using NetMsgBusGetData 
-TPS: 62K. Avg time: less than 2ms.
+TPS: 82K. Avg time: less than 2ms.
