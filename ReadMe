@@ -1,4 +1,6 @@
 Make  all communication between modules , processes even machines as simple as sending message.
+Service registration and auto discovery supported. It can be used as the communication for the services across the machines.
+
 Work for Mac and Linux.
 
 Performance:
