@@ -398,7 +398,7 @@ void testremotemsgbus()
             service_name = "test.receiverclient_A";
             thandlerobj->AddHandler("msg_netmsgbus_testmsg1", &MyMsgHandlerClass::testMsgBus1, 0); 
             thandlerobj->AddHandler("msg_netmsgbus_testmsg2", &MyMsgHandlerClass::testMsgBus2, 0);
-            thandlerobj->AddHandler("msg_netmsgbus_testgetdata", &MyMsgHandlerClass::testMsgBus3, 0);
+            thandlerobj->AddHandler("msg_netmsgbus_testgetdata", &MyMsgHandlerClass::testMsgBus3, 2);
             clientport = 9100;
         }
         else if(inputflag == 'b')
