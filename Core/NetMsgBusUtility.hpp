@@ -14,11 +14,15 @@
 #include <arpa/inet.h>
 
 #define NETMSGBUS_EVLOOP_NAME "evloop_for_netmsgbus"
+#define SENDER_LEN_BYTES 1
+#define MSGKEY_LEN_BYTES 1
+#define MSGVALUE_LEN_BYTES 4
 
 using namespace core::net;
 
 namespace NetMsgBus
 {
+
 static core::LoggerCategory g_log("NetMsgBusUtility");
 
 static const std::string endcoded_percent_str = "%25";
@@ -31,6 +35,8 @@ static const std::string msgparam_str = "msgparam";
 static const std::string msgsender_str = "msgsender";
 inline void EncodeMsgKeyValue(std::string& orig_value)
 {
+    // no need encode using the fixed schema.
+    return;
     // replace % and &
     size_t i = 0; 
     while(i < orig_value.size())
@@ -54,6 +60,7 @@ inline void EncodeMsgKeyValue(std::string& orig_value)
 
 inline void DecodeMsgKeyValue(std::string& orig_value)
 {
+    return;
     // replace % 
     size_t i = 0; 
     while(i < orig_value.size())
@@ -74,41 +81,65 @@ inline void DecodeMsgKeyValue(std::string& orig_value)
     }
 }
 
-inline bool GetMsgKey(const std::string& netmsgbus_msgcontent, const std::string& msgkey, 
-    std::string& msgvalue)
+inline bool GetMsgSender(const std::string& netmsgbus_msgcontent, std::string& sender)
 {
-    std::size_t startpos = netmsgbus_msgcontent.find(msgkey + equal_str);
-    if(startpos != std::string::npos)
-    {
-        std::size_t endpos = netmsgbus_msgcontent.find(and_str, startpos);
-        if(endpos != std::string::npos)
-        {
-            msgvalue = std::string(netmsgbus_msgcontent, startpos + msgkey.size() + 1,
-                endpos - startpos - (msgkey.size() + 1));
-        }
-        else
-        {
-            msgvalue = std::string(netmsgbus_msgcontent, startpos + msgkey.size() + 1);
-        }
-        DecodeMsgKeyValue(msgvalue);
-        return true;
-    }
-    //printf("netmsgbus_msgcontent error, no %s found.\n", msgkey.c_str());
-    return false;
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES)
+      return false;
+    uint8_t msgsender_len = (uint8_t)netmsgbus_msgcontent[0];
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES + (std::size_t)msgsender_len)
+      return false;
+
+    sender = netmsgbus_msgcontent.substr(SENDER_LEN_BYTES, msgsender_len);
+    return true;
+}
+
+inline bool GetMsgId(const std::string& netmsgbus_msgcontent, std::string& msgid)
+{
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES)
+      return false;
+    uint8_t msgsender_len = (uint8_t)netmsgbus_msgcontent[0];
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES + (std::size_t)msgsender_len + MSGKEY_LEN_BYTES)
+      return false;
+    uint8_t msgid_len = (uint8_t)(netmsgbus_msgcontent[SENDER_LEN_BYTES + msgsender_len]);
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES + (std::size_t)msgsender_len + MSGKEY_LEN_BYTES + (std::size_t)msgid_len)
+      return false;
+    msgid = netmsgbus_msgcontent.substr(SENDER_LEN_BYTES + (std::size_t)msgsender_len + MSGKEY_LEN_BYTES, msgid_len);
+    return true;
+
+    //std::size_t startpos = netmsgbus_msgcontent.find(msgkey + equal_str);
+    //if(startpos != std::string::npos)
+    //{
+    //    std::size_t endpos = netmsgbus_msgcontent.find(and_str, startpos);
+    //    if(endpos != std::string::npos)
+    //    {
+    //        msgvalue = std::string(netmsgbus_msgcontent, startpos + msgkey.size() + 1,
+    //            endpos - startpos - (msgkey.size() + 1));
+    //    }
+    //    else
+    //    {
+    //        msgvalue = std::string(netmsgbus_msgcontent, startpos + msgkey.size() + 1);
+    //    }
+    //    DecodeMsgKeyValue(msgvalue);
+    //    return true;
+    //}
+    // //printf("netmsgbus_msgcontent error, no %s found.\n", msgkey.c_str());
+    //return false;
 }
 
 inline bool CheckMsgSender(const std::string& netmsgbus_msgcontent, std::string& msgsender)
 {
-    if(GetMsgKey(netmsgbus_msgcontent, msgsender_str, msgsender))
+    if(GetMsgSender(netmsgbus_msgcontent, msgsender))
     {
         return FilterMgr::FilterBySender(msgsender);
     }
     return false;
 }
 
+// 1 byte msg_sender len + length of msg sender + 1byte msgid length + length of msgid + 4bytes msgparam len + length of msgparam.
 inline bool CheckMsgId(const std::string& netmsgbus_msgcontent, std::string& msgid)
 {
-    if(GetMsgKey(netmsgbus_msgcontent, msgid_str, msgid))
+    // 
+    if(GetMsgId(netmsgbus_msgcontent, msgid))
     {
         return FilterMgr::FilterByMsgId(msgid);
     }
@@ -118,34 +149,74 @@ inline bool CheckMsgId(const std::string& netmsgbus_msgcontent, std::string& msg
 inline bool GetMsgParam(const std::string& netmsgbus_msgcontent, boost::shared_array<char>& msgparam, uint32_t& param_len)
 {
     std::string msgparamstr;
-    if(GetMsgKey(netmsgbus_msgcontent, msgparam_str, msgparamstr))
-    {
-        assert(msgparamstr.size());
-        msgparam.reset(new char[msgparamstr.size()]);
-        memcpy(msgparam.get(), msgparamstr.data(), msgparamstr.size());
-        param_len = msgparamstr.size();
-        return true;
-    }
-    printf("netmsgbus_msgcontent error, no msgparam found.\n");
-    return false;
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES)
+      return false;
+    uint8_t msgsender_len = (uint8_t)netmsgbus_msgcontent[0];
+    if (netmsgbus_msgcontent.length() < SENDER_LEN_BYTES + (std::size_t)msgsender_len + MSGKEY_LEN_BYTES)
+      return false;
+    uint8_t msgkey_len = (uint8_t)(netmsgbus_msgcontent[SENDER_LEN_BYTES + msgsender_len]);
+    uint32_t msgparam_offset = SENDER_LEN_BYTES + msgsender_len + MSGKEY_LEN_BYTES + msgkey_len;
+    if (netmsgbus_msgcontent.length() <  msgparam_offset + MSGVALUE_LEN_BYTES)
+      return false;
+
+    uint32_t netparam_len = *((uint32_t *)&netmsgbus_msgcontent[msgparam_offset]);
+    param_len = ntohl(netparam_len);
+    if (netmsgbus_msgcontent.length() < msgparam_offset + MSGVALUE_LEN_BYTES + param_len)
+      return false;
+
+    msgparam.reset(new char[param_len]);
+    memcpy(msgparam.get(), &netmsgbus_msgcontent[msgparam_offset + MSGVALUE_LEN_BYTES], param_len);
+    return true;
+
+    //if(GetMsgKey(netmsgbus_msgcontent, msgparam_str, msgparamstr))
+    //{
+    //    assert(msgparamstr.size());
+    //    msgparam.reset(new char[msgparamstr.size()]);
+    //    memcpy(msgparam.get(), msgparamstr.data(), msgparamstr.size());
+    //    param_len = msgparamstr.size();
+    //    return true;
+    //}
+    //printf("netmsgbus_msgcontent error, no msgparam found.\n");
+    //return false;
 }
 
 inline void GenerateNetMsgContent(const std::string& msgid, MsgBusParam param, const std::string& msgsender,
     MsgBusParam& netmsg_data)
 {
-    const static std::string msgidstr = "msgid=";
-    const static std::string andmsgparamstr = "&msgparam=";
-    const static std::string andmsgsenderstr = "&msgsender=";
-    std::string netmsg_str(param.paramdata.get(), param.paramlen);
-    std::string encodemsgid = msgid;
-    std::string encode_msgsender = msgsender;
-    EncodeMsgKeyValue(encodemsgid);
-    EncodeMsgKeyValue(netmsg_str);
-    EncodeMsgKeyValue(encode_msgsender);
-    netmsg_str = msgidstr + encodemsgid + andmsgparamstr + netmsg_str + andmsgsenderstr + encode_msgsender;
-    netmsg_data.paramlen = netmsg_str.size();
+    uint8_t msgsender_len = (uint8_t)msgsender.size();
+    uint8_t msgid_len = (uint8_t)msgid.size();
+    uint32_t netmsgparam_len = htonl(param.paramlen);
+    netmsg_data.paramlen = sizeof(msgsender_len) + msgsender_len + sizeof(msgid_len) + msgid_len + 
+      sizeof(netmsgparam_len) + param.paramlen;
     netmsg_data.paramdata.reset(new char[netmsg_data.paramlen]);
-    memcpy(netmsg_data.paramdata.get(), netmsg_str.data(), netmsg_data.paramlen);
+    char *pdata = netmsg_data.paramdata.get();
+    memcpy(pdata, &msgsender_len, sizeof(msgsender_len));
+    pdata += sizeof(msgsender_len);
+    memcpy(pdata, (const char*)&msgsender[0], msgsender_len);
+    pdata += msgsender_len;
+    memcpy(pdata, (char*)&msgid_len, sizeof(msgid_len));
+    pdata += sizeof(msgid_len);
+    memcpy(pdata, (const char*)&msgid[0], msgid_len);
+    pdata += msgid_len;
+    memcpy(pdata, (char*)&netmsgparam_len, sizeof(netmsgparam_len));
+    pdata += sizeof(netmsgparam_len);
+    memcpy(pdata, param.paramdata.get(), param.paramlen);
+    return;
+
+
+    //const static std::string msgidstr = "msgid=";
+    //const static std::string andmsgparamstr = "&msgparam=";
+    //const static std::string andmsgsenderstr = "&msgsender=";
+    //std::string netmsg_str(param.paramdata.get(), param.paramlen);
+    //std::string encodemsgid = msgid;
+    //std::string encode_msgsender = msgsender;
+    //EncodeMsgKeyValue(encodemsgid);
+    //EncodeMsgKeyValue(netmsg_str);
+    //EncodeMsgKeyValue(encode_msgsender);
+    //netmsg_str = msgidstr + encodemsgid + andmsgparamstr + netmsg_str + andmsgsenderstr + encode_msgsender;
+    //netmsg_data.paramlen = netmsg_str.size();
+    //netmsg_data.paramdata.reset(new char[netmsg_data.paramlen]);
+    //memcpy(netmsg_data.paramdata.get(), netmsg_str.data(), netmsg_data.paramlen);
 }
 
 // response to the client who has send a msg using sync mode.
