@@ -38,7 +38,7 @@ namespace threadpool
             struct timeval waited;
             timersub(&end, &start,&waited);
             unsigned waitmsec = waited.tv_sec*1000 + waited.tv_usec/1000;
-            printf("wait wrong,waited only %d ms.\n",waitmsec);
+            //printf("wait wrong,waited only %d ms.\n",waitmsec);
             if(waitmsec<msec)
                 return msec-waitmsec;
             return 0;
@@ -65,7 +65,10 @@ namespace threadpool
             if(m_tpool->getterminate())
                 return false;
 
-            wait(1000);
+            int waitms = 1000;
+            while(waitms > 0) {
+              waitms = wait(waitms);
+            }
             if(m_tpool->getterminate())
                 return false;
             //printf("timer proc in thread: %lu.\n",(unsigned long)pthread_self());
