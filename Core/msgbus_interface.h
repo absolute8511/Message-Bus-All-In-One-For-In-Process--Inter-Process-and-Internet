@@ -15,7 +15,7 @@ namespace NetMsgBus
     struct MsgBusParam
     {
         MsgBusParam()
-            :paramdata(NULL),
+            :paramdata(),
             paramlen(0)
         {
         }

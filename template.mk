@@ -14,10 +14,10 @@ PBCC := protoc
 PBCCFLAGS := --cpp_out=.
 ifeq ($(BUILD),release)
 # for release version
-CPPFLAGS :=  -O3 -g -DNDEBUG -D__STDC_FORMAT_MACROS -fPIC -I/usr/local/Cellar/boost/1.46.0/include
+CPPFLAGS :=  -O3 -g -DNDEBUG -D__STDC_FORMAT_MACROS -fPIC -I$(BOOST_ROOT)
 else
 # for debug version
-CPPFLAGS :=  -O0  -D__STDC_FORMAT_MACROS -Wall -fPIC -g -pg -I/usr/local/Cellar/boost/1.46.0/include
+CPPFLAGS :=  -O0  -D__STDC_FORMAT_MACROS -Wall -fPIC -g -pg -I$(BOOST_ROOT)
 endif
 LDFLAGS := -L. -L$(BINDIR) -L$(LIBDIR) -Wl,-rpath,./ -Wl,-rpath-link,$(SHELLROOT)/$(BINDIR):$(SHELLROOT)/$(LIBDIR)
 SHARED  := -shared

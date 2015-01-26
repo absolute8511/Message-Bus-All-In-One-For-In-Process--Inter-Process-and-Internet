@@ -53,7 +53,7 @@ $(MSGBUS_SERVER_TARGET): $(MSGBUS_SERVER_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) $
 	$(CC)  -o $@ $^ $(LDFLAGS) `pkg-config --libs protobuf`
 
 $(TESTTARGET):test.cpp msgbus_handlerbase.hpp msgbus_interface.h threadpool.h xparam.hpp $(OBJDIR)/MsgHandlerMgr.o
-	$(CC) $(CPPFLAGS) -o $@ $< $(OBJDIR)/MsgHandlerMgr.o -lmsgbusclient -ljsoncpp $(LDFLAGS)  
+	$(CC) $(CPPFLAGS) -o $@ $< $(OBJDIR)/MsgHandlerMgr.o -lmsgbusclient -ljsoncpp $(LDFLAGS) `pkg-config --libs protobuf` 
 
 clean:
 	-rm -f *.d $(THREADPOOL_TARGET) $(THREADPOOL_OBJS_PATH) $(EVENTLOOPPOOL_OBJS_PATH) \
